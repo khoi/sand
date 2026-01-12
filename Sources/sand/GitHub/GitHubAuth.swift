@@ -5,6 +5,16 @@ struct GitHubClaims: Claims {
     let iss: String
     let iat: Date
     let exp: Date
+
+    func encode() throws -> String {
+        let jsonEncoder = JSONEncoder()
+        jsonEncoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(Int(date.timeIntervalSince1970))
+        }
+        let data = try jsonEncoder.encode(self)
+        return JWTEncoder.base64urlEncodedString(data: data)
+    }
 }
 
 protocol GitHubAuthenticating {
