@@ -1,0 +1,46 @@
+import XCTest
+@testable import sand
+
+final class TartTests: XCTestCase {
+    final class MockProcessRunner: ProcessRunning {
+        struct Call: Equatable {
+            let executable: String
+            let arguments: [String]
+            let wait: Bool
+        }
+
+        var calls: [Call] = []
+        var results: [ProcessResult?] = []
+
+        func run(executable: String, arguments: [String], wait: Bool) throws -> ProcessResult? {
+            calls.append(Call(executable: executable, arguments: arguments, wait: wait))
+            if results.isEmpty {
+                return ProcessResult(stdout: "", stderr: "", exitCode: 0)
+            }
+            return results.removeFirst()
+        }
+    }
+
+    func testCloneArgs() throws {
+        let runner = MockProcessRunner()
+        let tart = Tart(processRunner: runner)
+        try tart.clone(source: "source", name: "ephemeral")
+        XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["clone", "source", "ephemeral"], wait: true))
+    }
+
+    func testRunArgs() throws {
+        let runner = MockProcessRunner()
+        let tart = Tart(processRunner: runner)
+        try tart.run(name: "ephemeral")
+        XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics"], wait: false))
+    }
+
+    func testIPArgs() throws {
+        let runner = MockProcessRunner()
+        runner.results = [ProcessResult(stdout: "10.0.0.1\n", stderr: "", exitCode: 0)]
+        let tart = Tart(processRunner: runner)
+        let ip = try tart.ip(name: "ephemeral", wait: 60)
+        XCTAssertEqual(ip, "10.0.0.1")
+        XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["ip", "ephemeral", "--wait", "60"], wait: true))
+    }
+}
