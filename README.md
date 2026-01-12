@@ -149,7 +149,7 @@ tart delete runner-1
 
 ```
 swift test
-swift run sand run --config ./sample_config.yml
+swift run sand run --config ./fixtures/sample_config.yml
 ```
 
 ## Acknowledgements
