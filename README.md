@@ -70,7 +70,7 @@ provisioner:
 swift run sand --config sand.yml
 ```
 
-sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C.
+sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current `ephemeral` VM before exiting.
 
 Logs are emitted to stdout by default.
 
@@ -105,7 +105,7 @@ provision
 5. Executes the provisioner inside the VM.
 6. Stops and deletes the `ephemeral` VM.
 
-If the process is interrupted, you can clean up manually:
+If cleanup does not complete (for example, if Tart is unavailable), you can clean up manually:
 
 ```
 tart stop ephemeral
