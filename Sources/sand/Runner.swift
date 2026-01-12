@@ -1,7 +1,7 @@
 import Foundation
 import Logging
 
-struct Runner {
+struct Runner: @unchecked Sendable {
     let tart: Tart
     let github: GitHubService?
     let provisioner: GitHubProvisioner
