@@ -1,4 +1,5 @@
 stopAfter: 2
+runnerCount: 2
 vm:
   source:
     type: oci

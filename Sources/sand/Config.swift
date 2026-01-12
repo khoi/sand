@@ -230,6 +230,14 @@ struct Config: Decodable {
     let vm: VM
     let provisioner: Provisioner
     let stopAfter: Int?
+    let runnerCount: Int?
+
+    init(vm: VM, provisioner: Provisioner, stopAfter: Int?, runnerCount: Int? = nil) {
+        self.vm = vm
+        self.provisioner = provisioner
+        self.stopAfter = stopAfter
+        self.runnerCount = runnerCount
+    }
 
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
@@ -266,7 +274,7 @@ struct Config: Decodable {
             ssh: vm.ssh
         )
         let expandedProvisioner = provisioner.expanded()
-        return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter)
+        return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter, runnerCount: runnerCount)
     }
 
     static func expandPath(_ path: String) -> String {

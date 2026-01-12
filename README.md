@@ -10,10 +10,11 @@ sand is a Swift CLI that runs ephemeral macOS VMs via Tart and executes a provis
 
 ## Configuration
 
-Create a `sand.yml` and run the CLI with `--config`. If `stopAfter` is omitted, sand loops forever.
+Create a `sand.yml` and run the CLI with `--config`. If `stopAfter` is omitted, sand loops forever. Set `runnerCount` to run multiple VMs concurrently.
 
 ```
 stopAfter: 1
+runnerCount: 2
 vm:
   source:
     type: oci
@@ -49,6 +50,7 @@ provisioner:
 
 ```
 stopAfter: 1
+runnerCount: 2
 vm:
   source:
     type: oci
@@ -70,7 +72,9 @@ provisioner:
 swift run sand run --config sand.yml
 ```
 
-sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current `ephemeral` VM before exiting.
+sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current `sandrunner` VM (or `sandrunner-<index>` when `runnerCount` > 1) before exiting.
+
+When `runnerCount` is greater than 1, sand starts that many VMs concurrently. For GitHub provisioners, sand appends `-1`, `-2`, etc. to the configured `runnerName` to keep each runner name unique.
 
 Logs are emitted to stdout by default.
 
@@ -85,7 +89,7 @@ sand
 prepare source (pull if missing)
   |
   v
-clone -> run VM (ephemeral)
+clone -> run VM (sandrunner[-<index>])
   |
   v
 get IP
@@ -95,22 +99,22 @@ provision
   |-- script: tart exec /bin/bash -lc "<run>"
   `-- github: tart exec -> install + config runner -> run.sh
   |
-  stop + delete ephemeral
+  stop + delete sandrunner[-<index>]
 ```
 
 1. Pulls the OCI image if it is not already present locally.
-2. Clones the source VM into a local VM named `ephemeral`.
+2. Clones the source VM into a local VM named `sandrunner` (or `sandrunner-<index>`).
 3. Starts the VM headless.
 4. Retrieves the VM IP address.
 5. Executes the provisioner inside the VM.
-6. Stops and deletes the `ephemeral` VM.
+6. Stops and deletes the `sandrunner` VM.
 
 If cleanup does not complete (for example, if Tart is unavailable), you can clean up manually:
 
 ```
-tart stop ephemeral
+tart stop sandrunner
 
-tart delete ephemeral
+tart delete sandrunner
 ```
 
 ## Tests

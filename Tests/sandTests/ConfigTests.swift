@@ -6,6 +6,7 @@ import Testing
 func parsesConfigAndExpandsPaths() throws {
     let yaml = """
     stopAfter: 1
+    runnerCount: 2
     vm:
       source:
         type: local
@@ -44,6 +45,7 @@ func parsesConfigAndExpandsPaths() throws {
     let config = try Config.load(path: url.path)
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     #expect(config.stopAfter == 1)
+    #expect(config.runnerCount == 2)
     #expect(config.vm.hardware?.ramGb == 4)
     #expect(config.vm.source.type == .local)
     #expect(config.vm.source.resolvedSource == "file://\(home)/vm")
@@ -85,6 +87,7 @@ func scriptProvisioner() throws {
     """
     let url = try writeTempFile(contents: yaml)
     let config = try Config.load(path: url.path)
+    #expect(config.runnerCount == nil)
     #expect(config.vm.hardware == nil)
     #expect(config.vm.source.type == .oci)
     #expect(config.vm.source.resolvedSource == "ghcr.io/acme/vm:latest")

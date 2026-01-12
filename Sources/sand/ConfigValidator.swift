@@ -20,6 +20,12 @@ final class ConfigValidator {
                 message: "stopAfter is \(stopAfter); sand will exit immediately."
             ))
         }
+        if let runnerCount = config.runnerCount, runnerCount <= 0 {
+            issues.append(.init(
+                severity: .error,
+                message: "runnerCount must be greater than 0."
+            ))
+        }
 
         validateVM(config.vm, issues: &issues)
         validateProvisioner(config.provisioner, issues: &issues)

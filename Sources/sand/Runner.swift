@@ -7,12 +7,32 @@ struct Runner {
     let provisioner: GitHubProvisioner
     let config: Config
     let shutdownCoordinator: VMShutdownCoordinator
-    private let logger = Logger(label: "host")
-    private let vmLogger = Logger(label: "vm")
+    let vmName: String
+    private let logger: Logger
+    private let vmLogger: Logger
 
     enum RunnerError: Error {
         case missingGitHub
         case missingScript
+    }
+
+    init(
+        tart: Tart,
+        github: GitHubService?,
+        provisioner: GitHubProvisioner,
+        config: Config,
+        shutdownCoordinator: VMShutdownCoordinator,
+        vmName: String,
+        logLabel: String
+    ) {
+        self.tart = tart
+        self.github = github
+        self.provisioner = provisioner
+        self.config = config
+        self.shutdownCoordinator = shutdownCoordinator
+        self.vmName = vmName
+        self.logger = Logger(label: "host.\(logLabel)")
+        self.vmLogger = Logger(label: "vm.\(logLabel)")
     }
 
     func run() async throws {
@@ -31,7 +51,7 @@ struct Runner {
     }
 
     private func runOnce() async throws {
-        let name = "sandrunner"
+        let name = vmName
         let source = config.vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)

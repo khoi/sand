@@ -24,7 +24,8 @@ func validConfigHasNoIssues() throws {
     let config = Config(
         vm: vm,
         provisioner: Config.Provisioner(type: .github, script: nil, github: github),
-        stopAfter: 1
+        stopAfter: 1,
+        runnerCount: 2
     )
     let issues = ConfigValidator().validate(config)
     #expect(issues.isEmpty)
@@ -48,10 +49,12 @@ func invalidConfigReportsIssues() {
     let config = Config(
         vm: vm,
         provisioner: Config.Provisioner(type: .script, script: .init(run: "  "), github: nil),
-        stopAfter: 0
+        stopAfter: 0,
+        runnerCount: 0
     )
     let issues = ConfigValidator().validate(config)
     #expect(issues.contains(.init(severity: .warning, message: "stopAfter is 0; sand will exit immediately.")))
+    #expect(issues.contains(.init(severity: .error, message: "runnerCount must be greater than 0.")))
     #expect(issues.contains(.init(severity: .error, message: "Local VM path does not exist: /missing-vm.")))
     #expect(issues.contains(.init(severity: .error, message: "vm.hardware.ramGb must be greater than 0.")))
     #expect(issues.contains(.init(severity: .error, message: "vm.hardware.cpuCores must be greater than 0.")))
