@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import Logging
 
@@ -15,6 +16,14 @@ struct Sand: AsyncParsableCommand {
         let config = try Config.load(path: config)
         let processRunner = SystemProcessRunner()
         let tart = Tart(processRunner: processRunner)
+        let shutdownLogger = Logger(label: "sand.shutdown")
+        let shutdownCoordinator = VMShutdownCoordinator(logger: shutdownLogger)
+        let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
+            shutdownCoordinator.cleanup(tart: tart)
+        }
+        defer {
+            _ = signalHandler
+        }
         let github: GitHubService?
         switch config.provisioner.type {
         case .github:
@@ -33,7 +42,13 @@ struct Sand: AsyncParsableCommand {
             github = nil
         }
         let provisioner = GitHubProvisioner()
-        let runner = Runner(tart: tart, github: github, provisioner: provisioner, config: config)
+        let runner = Runner(
+            tart: tart,
+            github: github,
+            provisioner: provisioner,
+            config: config,
+            shutdownCoordinator: shutdownCoordinator
+        )
         try await runner.run()
     }
 }

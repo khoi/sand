@@ -6,6 +6,7 @@ struct Runner {
     let github: GitHubService?
     let provisioner: GitHubProvisioner
     let config: Config
+    let shutdownCoordinator: VMShutdownCoordinator
     private let logger = Logger(label: "sand.runner")
     private let vmLogger = Logger(label: "vm")
     private let execRetryAttempts = 12
@@ -38,9 +39,9 @@ struct Runner {
         try tart.prepare(source: source)
         logger.info("clone VM \(name) from \(source)")
         try tart.clone(source: source, name: name)
+        shutdownCoordinator.activate(name: name)
         defer {
-            logger.info("delete VM \(name)")
-            try? tart.delete(name: name)
+            shutdownCoordinator.cleanup(tart: tart)
         }
         try applyVMConfigIfNeeded(name: name)
         let runOptions = Tart.RunOptions(
@@ -58,10 +59,6 @@ struct Runner {
         )
         logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
-        defer {
-            logger.info("stop VM \(name)")
-            try? tart.stop(name: name)
-        }
         logger.info("wait for VM IP")
         let ip = try tart.ip(name: name, wait: 60)
         logger.info("VM IP \(ip)")
