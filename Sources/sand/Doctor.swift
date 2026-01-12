@@ -4,9 +4,6 @@ import Logging
 
 @available(macOS 14.0, *)
 struct Doctor: ParsableCommand {
-    @Option(name: .shortAndLong)
-    var config: String = "sand.yml"
-
     func run() throws {
         LoggingSystem.bootstrap { label in
             StreamLogHandler.standardOutput(label: label)
@@ -37,8 +34,6 @@ struct Doctor: ParsableCommand {
         } else {
             issues.append(contentsOf: checkTartHealth())
         }
-
-        issues.append(contentsOf: checkConfig())
         return issues
     }
 
@@ -52,17 +47,4 @@ struct Doctor: ParsableCommand {
         }
     }
 
-    private func checkConfig() -> [ConfigValidationIssue] {
-        let expandedPath = Config.expandPath(config)
-        guard FileManager.default.fileExists(atPath: expandedPath) else {
-            return [ConfigValidationIssue(severity: .warning, message: "Config file not found at \(expandedPath).")]
-        }
-        do {
-            let config = try Config.load(path: expandedPath)
-            let validator = ConfigValidator()
-            return validator.validate(config)
-        } catch {
-            return [ConfigValidationIssue(severity: .error, message: "Failed to load config at \(expandedPath): \(error.localizedDescription)")]
-        }
-    }
 }
