@@ -14,6 +14,15 @@ struct Runner {
     }
 
     func run() async throws {
+        if let stopAfter = config.stopAfter {
+            guard stopAfter > 0 else {
+                return
+            }
+            for _ in 0..<stopAfter {
+                try await runOnce()
+            }
+            return
+        }
         while true {
             try await runOnce()
         }

@@ -52,6 +52,26 @@ struct Config: Decodable {
 
     let source: String
     let provisioner: Provisioner
+    let stopAfter: Int?
+
+    init(source: String, provisioner: Provisioner, stopAfter: Int?) {
+        self.source = source
+        self.provisioner = provisioner
+        self.stopAfter = stopAfter
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.source = try container.decode(String.self, forKey: .source)
+        self.provisioner = try container.decode(Provisioner.self, forKey: .provisioner)
+        self.stopAfter = try container.decodeIfPresent(Int.self, forKey: .stopAfter)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case provisioner
+        case stopAfter
+    }
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
         let contents = try String(contentsOfFile: expandedPath, encoding: .utf8)
@@ -63,7 +83,7 @@ struct Config: Decodable {
     private func expanded() -> Config {
         let source = Config.expandSource(self.source)
         let provisioner = self.provisioner.expanded()
-        return Config(source: source, provisioner: provisioner)
+        return Config(source: source, provisioner: provisioner, stopAfter: stopAfter)
     }
 
     private static func expandPath(_ path: String) -> String {

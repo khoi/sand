@@ -10,11 +10,12 @@ sand is a Swift CLI that runs ephemeral macOS VMs via Tart and executes a provis
 
 ## Configuration
 
-Create a `sand.yml` and run the CLI with `--config`.
+Create a `sand.yml` and run the CLI with `--config`. If `stopAfter` is omitted, sand loops forever.
 
 ### Script provisioner
 
 ```
+stopAfter: 1
 source: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
 provisioner:
   type: script
@@ -27,6 +28,7 @@ provisioner:
 ### GitHub Actions runner provisioner
 
 ```
+stopAfter: 1
 source: ghcr.io/cirruslabs/macos-runner:tahoe
 provisioner:
   type: github
@@ -45,11 +47,11 @@ provisioner:
 swift run sand --config sand.yml
 ```
 
-sand runs an infinite loop. Stop it with Ctrl+C.
+sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C.
 
 ## Behavior
 
-Each loop iteration does the following:
+Each iteration does the following:
 
 ```
 sand

@@ -4,6 +4,7 @@ import XCTest
 final class ConfigTests: XCTestCase {
     func testParsesConfigAndExpandsPaths() throws {
         let yaml = """
+        stopAfter: 1
         source: file://~/vm
         provisioner:
           type: github
@@ -17,6 +18,7 @@ final class ConfigTests: XCTestCase {
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
+        XCTAssertEqual(config.stopAfter, 1)
         XCTAssertEqual(config.source, "file://\(FileManager.default.homeDirectoryForCurrentUser.path)/vm")
         XCTAssertEqual(config.provisioner.type, .github)
         XCTAssertEqual(config.provisioner.github?.organization, "acme")
@@ -38,12 +40,14 @@ final class ConfigTests: XCTestCase {
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
+        XCTAssertNil(config.stopAfter)
         XCTAssertNil(config.provisioner.github?.repository)
         XCTAssertNil(config.provisioner.github?.extraLabels)
     }
 
     func testScriptProvisioner() throws {
         let yaml = """
+        stopAfter: 3
         source: ghcr.io/acme/vm:latest
         provisioner:
           type: script
@@ -54,6 +58,7 @@ final class ConfigTests: XCTestCase {
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
+        XCTAssertEqual(config.stopAfter, 3)
         XCTAssertEqual(config.provisioner.type, .script)
         XCTAssertEqual(config.provisioner.script?.run.contains("Hello World"), true)
     }
