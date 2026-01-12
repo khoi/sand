@@ -104,3 +104,10 @@ tart delete ephemeral
 ```
 swift test
 ```
+
+## Acknowledgements
+
+Without these amazing projects, there would be no sand.
+
+- https://github.com/cirruslabs/tart 
+- https://github.com/traderepublic/Cilicon
