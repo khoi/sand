@@ -78,7 +78,9 @@ provision
 stop + delete ephemeral
   |
   v
-repeat
+repeat ───────────────────────────────┐
+                                      |
+                                      └───────────── back to top
 ```
 
 1. Pulls the OCI image if it is not already present locally.
