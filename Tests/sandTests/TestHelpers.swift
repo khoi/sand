@@ -1,5 +1,10 @@
 import Foundation
-import XCTest
+import Testing
+
+enum TestHelperError: Error {
+    case invalidTokenPartsCount
+    case invalidPayload
+}
 
 func writeTempFile(contents: String, suffix: String = "") throws -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -11,13 +16,14 @@ func writeTempFile(contents: String, suffix: String = "") throws -> URL {
 
 func decodeJWTClaims(_ token: String) throws -> [String: Any] {
     let parts = token.split(separator: ".")
-    XCTAssertEqual(parts.count, 3)
+    guard parts.count == 3 else {
+        throw TestHelperError.invalidTokenPartsCount
+    }
     let payload = String(parts[1])
     let data = try base64URLDecode(payload)
     let json = try JSONSerialization.jsonObject(with: data)
     guard let dict = json as? [String: Any] else {
-        XCTFail("Invalid payload")
-        return [:]
+        throw TestHelperError.invalidPayload
     }
     return dict
 }

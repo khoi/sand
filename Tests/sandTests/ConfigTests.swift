@@ -1,85 +1,84 @@
-import XCTest
+import Foundation
+import Testing
 @testable import sand
 
-final class ConfigTests: XCTestCase {
-    func testParsesConfigAndExpandsPaths() throws {
-        let yaml = """
-        stopAfter: 1
-        vm:
-          source:
-            type: local
-            path: ~/vm
-          hardware:
-            ramGb: 4
-            display:
-              width: 1920
-              height: 1200
-              unit: px
-              refit: true
-          mounts:
-            - hostPath: ~/cache
-              guestFolder: cache
-              readOnly: true
-              tag: build
-          run:
-            noGraphics: false
-            noClipboard: true
-          diskSizeGb: 80
-        provisioner:
-          type: github
-          config:
-            appId: 42
-            organization: acme
-            repository: repo
-            privateKeyPath: ~/key.pem
-            runnerName: runner-1
-            extraLabels: [fast, arm64]
-        """
-        let url = try writeTempFile(contents: yaml)
-        let config = try Config.load(path: url.path)
-        XCTAssertEqual(config.stopAfter, 1)
-        XCTAssertEqual(config.vm.hardware?.ramGb, 4)
-        XCTAssertEqual(config.vm.source.type, .local)
-        XCTAssertEqual(
-            config.vm.source.resolvedSource,
-            "file://\(FileManager.default.homeDirectoryForCurrentUser.path)/vm"
-        )
-        XCTAssertEqual(config.vm.mounts.first?.hostPath, "\(FileManager.default.homeDirectoryForCurrentUser.path)/cache")
-        XCTAssertEqual(config.vm.mounts.first?.guestFolder, "cache")
-        XCTAssertEqual(config.vm.mounts.first?.readOnly, true)
-        XCTAssertEqual(config.vm.mounts.first?.tag, "build")
-        XCTAssertEqual(config.vm.run.noGraphics, false)
-        XCTAssertEqual(config.vm.run.noClipboard, true)
-        XCTAssertEqual(config.vm.diskSizeGb, 80)
-        XCTAssertEqual(config.vm.hardware?.display?.refit, true)
-        XCTAssertEqual(config.provisioner.type, .github)
-        XCTAssertEqual(config.provisioner.github?.organization, "acme")
-        XCTAssertEqual(config.provisioner.github?.repository, "repo")
-        XCTAssertEqual(config.provisioner.github?.extraLabels ?? [], ["fast", "arm64"])
-        XCTAssertTrue(config.provisioner.github?.privateKeyPath.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ?? false)
-    }
+@Test
+func parsesConfigAndExpandsPaths() throws {
+    let yaml = """
+    stopAfter: 1
+    vm:
+      source:
+        type: local
+        path: ~/vm
+      hardware:
+        ramGb: 4
+        display:
+          width: 1920
+          height: 1200
+          unit: px
+          refit: true
+      mounts:
+        - hostPath: ~/cache
+          guestFolder: cache
+          readOnly: true
+          tag: build
+      run:
+        noGraphics: false
+        noClipboard: true
+      diskSizeGb: 80
+    provisioner:
+      type: github
+      config:
+        appId: 42
+        organization: acme
+        repository: repo
+        privateKeyPath: ~/key.pem
+        runnerName: runner-1
+        extraLabels: [fast, arm64]
+    """
+    let url = try writeTempFile(contents: yaml)
+    let config = try Config.load(path: url.path)
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    #expect(config.stopAfter == 1)
+    #expect(config.vm.hardware?.ramGb == 4)
+    #expect(config.vm.source.type == .local)
+    #expect(config.vm.source.resolvedSource == "file://\(home)/vm")
+    #expect(config.vm.mounts.first?.hostPath == "\(home)/cache")
+    #expect(config.vm.mounts.first?.guestFolder == "cache")
+    #expect(config.vm.mounts.first?.readOnly == true)
+    #expect(config.vm.mounts.first?.tag == "build")
+    #expect(config.vm.run.noGraphics == false)
+    #expect(config.vm.run.noClipboard == true)
+    #expect(config.vm.diskSizeGb == 80)
+    #expect(config.vm.hardware?.display?.refit == true)
+    #expect(config.provisioner.type == .github)
+    #expect(config.provisioner.github?.organization == "acme")
+    #expect(config.provisioner.github?.repository == "repo")
+    #expect(config.provisioner.github?.extraLabels ?? [] == ["fast", "arm64"])
+    #expect(config.provisioner.github?.privateKeyPath.hasPrefix(home) ?? false)
+}
 
-    func testScriptProvisioner() throws {
-        let yaml = """
-        vm:
-          source:
-            type: oci
-            image: ghcr.io/acme/vm:latest
-        provisioner:
-          type: script
-          config:
-            run: |
-              echo "Hello World"
-              sleep 1
-        """
-        let url = try writeTempFile(contents: yaml)
-        let config = try Config.load(path: url.path)
-        XCTAssertNil(config.vm.hardware)
-        XCTAssertEqual(config.vm.source.type, .oci)
-        XCTAssertEqual(config.vm.source.resolvedSource, "ghcr.io/acme/vm:latest")
-        XCTAssertEqual(config.vm.run.noGraphics, true)
-        XCTAssertEqual(config.vm.run.noClipboard, false)
-        XCTAssertEqual(config.provisioner.type, .script)
-        XCTAssertEqual(config.provisioner.script?.run.contains("Hello World"), true)
-    }
+@Test
+func scriptProvisioner() throws {
+    let yaml = """
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/acme/vm:latest
+    provisioner:
+      type: script
+      config:
+        run: |
+          echo "Hello World"
+          sleep 1
+    """
+    let url = try writeTempFile(contents: yaml)
+    let config = try Config.load(path: url.path)
+    #expect(config.vm.hardware == nil)
+    #expect(config.vm.source.type == .oci)
+    #expect(config.vm.source.resolvedSource == "ghcr.io/acme/vm:latest")
+    #expect(config.vm.run.noGraphics == true)
+    #expect(config.vm.run.noClipboard == false)
+    #expect(config.provisioner.type == .script)
+    #expect(config.provisioner.script?.run.contains("Hello World") == true)
 }
