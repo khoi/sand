@@ -73,8 +73,8 @@ struct Runner {
             logger.info("run script provisioner")
             let result = try await execWithRetry(name: name, command: run)
             if let result {
-                logLines(logger: vmLogger, "[VM stdout] \(result.stdout)", level: .info)
-                logLines(logger: vmLogger, "[VM stderr] \(result.stderr)", level: .info)
+                logLines(logger: vmLogger, "[stdout] \(result.stdout)", level: .info)
+                logLines(logger: vmLogger, "[stderr] \(result.stderr)", level: .info)
             }
             logger.info("script provisioner finished")
         case .github:
