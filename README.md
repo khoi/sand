@@ -79,8 +79,9 @@ stop + delete ephemeral
   |
   v
 repeat ───────────────────────────────┐
-                                      |
-                                      └───────────── back to top
+^                                     |
+|                                     |
+└─────────────────────────────────────┘
 ```
 
 1. Pulls the OCI image if it is not already present locally.
