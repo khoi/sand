@@ -105,7 +105,7 @@ tart delete ephemeral
 
 ```
 swift test
-swift run sand --config Tests/sample_config.yml # Replace with your an existing image to avoid cloning
+swift run sand --config ./sample_config.yml # Replace with your an existing image to avoid cloning
 ```
 
 ## Acknowledgements
