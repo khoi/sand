@@ -7,6 +7,8 @@ struct Runner {
     let provisioner: GitHubProvisioner
     let config: Config
     private let logger = Logger(subsystem: "sand", category: "runner")
+    private let execRetryAttempts = 12
+    private let execRetryDelaySeconds: UInt64 = 5
 
     enum RunnerError: Error {
         case missingGitHub
@@ -53,7 +55,7 @@ struct Runner {
                 throw RunnerError.missingScript
             }
             logger.info("run script provisioner")
-            let result = try tart.exec(name: name, command: run)
+            let result = try await execWithRetry(name: name, command: run)
             if let stdout = result?.stdout.data(using: .utf8) {
                 FileHandle.standardOutput.write(stdout)
             }
@@ -69,8 +71,31 @@ struct Runner {
             let token = try await github.runnerRegistrationToken()
             let downloadURL = try await github.runnerDownloadURL()
             let script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
-            _ = try tart.exec(name: name, command: script)
+            _ = try await execWithRetry(name: name, command: script)
             logger.info("github provisioner finished")
         }
+    }
+
+    private func execWithRetry(name: String, command: String) async throws -> ProcessResult? {
+        for attempt in 1...execRetryAttempts {
+            do {
+                return try tart.exec(name: name, command: command)
+            } catch {
+                guard isGuestAgentUnavailable(error), attempt < execRetryAttempts else {
+                    throw error
+                }
+                logger.info("tart exec failed (guest agent not ready), retrying in \(self.execRetryDelaySeconds)s (attempt \(attempt + 1) of \(self.execRetryAttempts))")
+                try await Task.sleep(nanoseconds: execRetryDelaySeconds * 1_000_000_000)
+            }
+        }
+        return nil
+    }
+
+    private func isGuestAgentUnavailable(_ error: Error) -> Bool {
+        guard case let ProcessRunnerError.failed(_, _, stderr, _) = error else {
+            return false
+        }
+        return stderr.localizedCaseInsensitiveContains("GRPCConnectionPoolError")
+            || stderr.localizedCaseInsensitiveContains("guest agent")
     }
 }
