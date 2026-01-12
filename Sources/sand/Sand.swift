@@ -11,20 +11,7 @@ struct Sand: AsyncParsableCommand {
         let config = try Config.load(path: config)
         let processRunner = SystemProcessRunner()
         let tart = Tart(processRunner: processRunner)
-        let github: GitHubService?
-        switch config.provisioner.type {
-        case .github:
-            guard let githubConfig = config.provisioner.github else {
-                github = nil
-                break
-            }
-            let auth = try GitHubAuth(appId: githubConfig.appId, privateKeyPath: githubConfig.privateKeyPath)
-            github = GitHubService(auth: auth, session: URLSession.shared, organization: githubConfig.organization, repository: githubConfig.repository)
-        case .script:
-            github = nil
-        }
-        let provisioner = GitHubProvisioner()
-        let runner = Runner(tart: tart, github: github, provisioner: provisioner, config: config)
+        let runner = Runner(tart: tart, config: config)
         try await runner.run()
     }
 }

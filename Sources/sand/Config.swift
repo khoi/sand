@@ -2,76 +2,67 @@ import Foundation
 import Yams
 
 struct Config: Decodable {
-    struct Provisioner: Decodable {
-        enum ProvisionerType: String, Decodable {
-            case script
-            case github
+    struct VM: Decodable {
+        let source: VMSource
+        let hardware: Hardware?
+    }
+
+    struct VMSource: Decodable {
+        enum SourceType: String, Decodable {
+            case oci
+            case local
         }
 
-        struct Script: Decodable {
-            let run: String
-        }
+        let type: SourceType
+        let image: String?
+        let path: String?
 
-        struct GitHub: Decodable {
-            let appId: Int
-            let organization: String
-            let repository: String?
-            let privateKeyPath: String
-            let runnerName: String
-            let extraLabels: [String]?
-        }
-
-        let type: ProvisionerType
-        let script: Script?
-        let github: GitHub?
-
-        init(type: ProvisionerType, script: Script?, github: GitHub?) {
+        init(type: SourceType, image: String?, path: String?) {
             self.type = type
-            self.script = script
-            self.github = github
+            self.image = image
+            self.path = path
+        }
+
+        var resolvedSource: String {
+            switch type {
+            case .oci:
+                return image ?? ""
+            case .local:
+                return Config.expandFileURL(path ?? "")
+            }
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            let type = try container.decode(ProvisionerType.self, forKey: .type)
+            self.type = try container.decode(SourceType.self, forKey: .type)
+            self.image = try container.decodeIfPresent(String.self, forKey: .image)
+            self.path = try container.decodeIfPresent(String.self, forKey: .path)
+
             switch type {
-            case .script:
-                let script = try container.decode(Script.self, forKey: .config)
-                self.init(type: type, script: script, github: nil)
-            case .github:
-                let github = try container.decode(GitHub.self, forKey: .config)
-                self.init(type: type, script: nil, github: github)
+            case .oci:
+                if (image ?? "").isEmpty {
+                    throw DecodingError.dataCorruptedError(forKey: .image, in: container, debugDescription: "OCI source requires image")
+                }
+            case .local:
+                if (path ?? "").isEmpty {
+                    throw DecodingError.dataCorruptedError(forKey: .path, in: container, debugDescription: "Local source requires path")
+                }
             }
         }
 
         private enum CodingKeys: String, CodingKey {
             case type
-            case config
+            case image
+            case path
         }
     }
 
-    let source: String
-    let provisioner: Provisioner
-    let stopAfter: Int?
-
-    init(source: String, provisioner: Provisioner, stopAfter: Int?) {
-        self.source = source
-        self.provisioner = provisioner
-        self.stopAfter = stopAfter
+    struct Hardware: Decodable {
+        let ramGb: Int
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.source = try container.decode(String.self, forKey: .source)
-        self.provisioner = try container.decode(Provisioner.self, forKey: .provisioner)
-        self.stopAfter = try container.decodeIfPresent(Int.self, forKey: .stopAfter)
-    }
+    let vm: VM
 
-    private enum CodingKeys: String, CodingKey {
-        case source
-        case provisioner
-        case stopAfter
-    }
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
         let contents = try String(contentsOfFile: expandedPath, encoding: .utf8)
@@ -81,9 +72,15 @@ struct Config: Decodable {
     }
 
     private func expanded() -> Config {
-        let source = Config.expandSource(self.source)
-        let provisioner = self.provisioner.expanded()
-        return Config(source: source, provisioner: provisioner, stopAfter: stopAfter)
+        switch vm.source.type {
+        case .oci:
+            return self
+        case .local:
+            let expandedPath = Config.expandFileURL(vm.source.path ?? "")
+            let source = VMSource(type: .local, image: nil, path: expandedPath)
+            let vm = VM(source: source, hardware: vm.hardware)
+            return Config(vm: vm)
+        }
     }
 
     private static func expandPath(_ path: String) -> String {
@@ -93,35 +90,12 @@ struct Config: Decodable {
         return path
     }
 
-    private static func expandSource(_ source: String) -> String {
-        if source.hasPrefix("file://") {
-            let prefix = "file://"
-            let rawPath = String(source.dropFirst(prefix.count))
-            let expanded = expandPath(rawPath)
-            return prefix + expanded
+    private static func expandFileURL(_ path: String) -> String {
+        let prefix = "file://"
+        if path.hasPrefix(prefix) {
+            let rawPath = String(path.dropFirst(prefix.count))
+            return prefix + expandPath(rawPath)
         }
-        return source
-    }
-}
-
-extension Config.Provisioner {
-    func expanded() -> Config.Provisioner {
-        switch type {
-        case .script:
-            return self
-        case .github:
-            guard let github else {
-                return self
-            }
-            let expanded = Config.Provisioner.GitHub(
-                appId: github.appId,
-                organization: github.organization,
-                repository: github.repository,
-                privateKeyPath: Config.expandPath(github.privateKeyPath),
-                runnerName: github.runnerName,
-                extraLabels: github.extraLabels
-            )
-            return Config.Provisioner(type: type, script: nil, github: expanded)
-        }
+        return prefix + expandPath(path)
     }
 }
