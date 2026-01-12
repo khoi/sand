@@ -49,6 +49,12 @@ swift run sand --config sand.yml
 
 sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C.
 
+To see OSLog output from sand, run with:
+
+```
+OS_LOG_LEVEL=debug OS_ACTIVITY_MODE=debug OS_ACTIVITY_DT_MODE=1 swift run sand --config sand.yml
+```
+
 ## Behavior
 
 Each iteration does the following:
