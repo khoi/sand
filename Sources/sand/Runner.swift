@@ -1,12 +1,12 @@
 import Foundation
-import OSLog
+import Logging
 
 struct Runner {
     let tart: Tart
     let github: GitHubService?
     let provisioner: GitHubProvisioner
     let config: Config
-    private let logger = Logger(subsystem: "sand", category: "runner")
+    private let logger = Logger(label: "sand.runner")
     private let execRetryAttempts = 12
     private let execRetryDelaySeconds: UInt64 = 5
 
@@ -33,12 +33,12 @@ struct Runner {
     private func runOnce() async throws {
         let name = "ephemeral"
         let source = config.vm.source.resolvedSource
-        logger.info("prepare source \(source, privacy: .public)")
+        logger.info("prepare source \(source)")
         try tart.prepare(source: source)
-        logger.info("clone VM \(name, privacy: .public) from \(source, privacy: .public)")
+        logger.info("clone VM \(name) from \(source)")
         try tart.clone(source: source, name: name)
         defer {
-            logger.info("delete VM \(name, privacy: .public)")
+            logger.info("delete VM \(name)")
             try? tart.delete(name: name)
         }
         try applyVMConfigIfNeeded(name: name)
@@ -55,15 +55,15 @@ struct Runner {
             noGraphics: config.vm.run.noGraphics,
             noClipboard: config.vm.run.noClipboard
         )
-        logger.info("boot VM \(name, privacy: .public)")
+        logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
         defer {
-            logger.info("stop VM \(name, privacy: .public)")
+            logger.info("stop VM \(name)")
             try? tart.stop(name: name)
         }
         logger.info("wait for VM IP")
         let ip = try tart.ip(name: name, wait: 60)
-        logger.info("VM IP \(ip, privacy: .public)")
+        logger.info("VM IP \(ip)")
         switch config.provisioner.type {
         case .script:
             guard let run = config.provisioner.script?.run else {
@@ -71,11 +71,9 @@ struct Runner {
             }
             logger.info("run script provisioner")
             let result = try await execWithRetry(name: name, command: run)
-            if let stdout = result?.stdout.data(using: .utf8) {
-                FileHandle.standardOutput.write(stdout)
-            }
-            if let stderr = result?.stderr.data(using: .utf8) {
-                FileHandle.standardError.write(stderr)
+            if let result {
+                logLines("[VM stdout] \(result.stdout)", level: .info)
+                logLines("[VM stderr] \(result.stderr)", level: .info)
             }
             logger.info("script provisioner finished")
         case .github:
@@ -134,5 +132,11 @@ struct Runner {
         }
         return stderr.localizedCaseInsensitiveContains("GRPCConnectionPoolError")
             || stderr.localizedCaseInsensitiveContains("guest agent")
+    }
+
+    private func logLines(_ text: String, level: Logger.Level) {
+        for line in text.split(whereSeparator: \.isNewline) {
+            logger.log(level: level, "\(line)")
+        }
     }
 }

@@ -1,8 +1,8 @@
-stopAfter: 1
+stopAfter: 5
 vm:
   source:
     type: oci
-    image: "ghcr.io/cirruslabs/macos-runner:tahoe"
+    image: "ghcr.io/cirruslabs/ubuntu:latest"
   hardware:
     ramGb: 4
 provisioner:

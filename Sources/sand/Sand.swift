@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import Logging
 
 @main
 @available(macOS 14.0, *)
@@ -8,6 +9,9 @@ struct Sand: AsyncParsableCommand {
     var config: String = "sand.yml"
 
     mutating func run() async throws {
+        LoggingSystem.bootstrap { label in
+            StreamLogHandler.standardOutput(label: label)
+        }
         let config = try Config.load(path: config)
         let processRunner = SystemProcessRunner()
         let tart = Tart(processRunner: processRunner)
