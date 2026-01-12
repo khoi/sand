@@ -269,14 +269,14 @@ struct Config: Decodable {
         return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter)
     }
 
-    fileprivate static func expandPath(_ path: String) -> String {
+    static func expandPath(_ path: String) -> String {
         if path.hasPrefix("~") {
             return (path as NSString).expandingTildeInPath
         }
         return path
     }
 
-    fileprivate static func expandFileURL(_ path: String) -> String {
+    static func expandFileURL(_ path: String) -> String {
         let prefix = "file://"
         if path.hasPrefix(prefix) {
             let rawPath = String(path.dropFirst(prefix.count))
