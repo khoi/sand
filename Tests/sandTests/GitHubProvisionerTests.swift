@@ -4,7 +4,7 @@ import XCTest
 final class GitHubProvisionerTests: XCTestCase {
     func testScriptWithExtraLabels() {
         let provisioner = GitHubProvisioner()
-        let config = Config.GitHub(
+        let config = Config.Provisioner.GitHub(
             appId: 1,
             organization: "org",
             repository: "repo",
@@ -19,7 +19,7 @@ final class GitHubProvisionerTests: XCTestCase {
 
     func testScriptWithDefaultLabels() {
         let provisioner = GitHubProvisioner()
-        let config = Config.GitHub(
+        let config = Config.Provisioner.GitHub(
             appId: 1,
             organization: "org",
             repository: nil,

@@ -1,7 +1,7 @@
 import Foundation
 
 struct GitHubProvisioner {
-    func script(config: Config.GitHub, runnerToken: String, downloadURL: URL) -> String {
+    func script(config: Config.Provisioner.GitHub, runnerToken: String, downloadURL: URL) -> String {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
         return [

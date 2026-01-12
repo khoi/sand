@@ -2,22 +2,61 @@ import Foundation
 import Yams
 
 struct Config: Decodable {
-    struct GitHub: Decodable {
-        let appId: Int
-        let organization: String
-        let repository: String?
-        let privateKeyPath: String
-        let runnerName: String
-        let extraLabels: [String]?
-    }
-
     struct SSH: Decodable {
         let username: String
         let password: String
     }
 
+    struct Provisioner: Decodable {
+        enum ProvisionerType: String, Decodable {
+            case script
+            case github
+        }
+
+        struct Script: Decodable {
+            let run: String
+        }
+
+        struct GitHub: Decodable {
+            let appId: Int
+            let organization: String
+            let repository: String?
+            let privateKeyPath: String
+            let runnerName: String
+            let extraLabels: [String]?
+        }
+
+        let type: ProvisionerType
+        let script: Script?
+        let github: GitHub?
+
+        init(type: ProvisionerType, script: Script?, github: GitHub?) {
+            self.type = type
+            self.script = script
+            self.github = github
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let type = try container.decode(ProvisionerType.self, forKey: .type)
+            switch type {
+            case .script:
+                let script = try container.decode(Script.self, forKey: .config)
+                self.init(type: type, script: script, github: nil)
+            case .github:
+                let github = try container.decode(GitHub.self, forKey: .config)
+                self.init(type: type, script: nil, github: github)
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case type
+            case config
+        }
+    }
+
     let source: String
-    let github: GitHub
+    let provisioner: Provisioner
     let ssh: SSH
 
     static func load(path: String) throws -> Config {
@@ -30,15 +69,8 @@ struct Config: Decodable {
 
     private func expanded() -> Config {
         let source = Config.expandSource(self.source)
-        let github = GitHub(
-            appId: github.appId,
-            organization: github.organization,
-            repository: github.repository,
-            privateKeyPath: Config.expandPath(github.privateKeyPath),
-            runnerName: github.runnerName,
-            extraLabels: github.extraLabels
-        )
-        return Config(source: source, github: github, ssh: ssh)
+        let provisioner = self.provisioner.expanded()
+        return Config(source: source, provisioner: provisioner, ssh: ssh)
     }
 
     private static func expandPath(_ path: String) -> String {
@@ -56,5 +88,27 @@ struct Config: Decodable {
             return prefix + expanded
         }
         return source
+    }
+}
+
+extension Config.Provisioner {
+    func expanded() -> Config.Provisioner {
+        switch type {
+        case .script:
+            return self
+        case .github:
+            guard let github else {
+                return self
+            }
+            let expanded = Config.Provisioner.GitHub(
+                appId: github.appId,
+                organization: github.organization,
+                repository: github.repository,
+                privateKeyPath: Config.expandPath(github.privateKeyPath),
+                runnerName: github.runnerName,
+                extraLabels: github.extraLabels
+            )
+            return Config.Provisioner(type: type, script: nil, github: expanded)
+        }
     }
 }
