@@ -40,14 +40,16 @@ final class TartTests: XCTestCase {
         let tart = Tart(processRunner: runner)
         let options = Tart.RunOptions(
             directoryMounts: [
-                Tart.DirectoryMount(hostPath: "/tmp/dir", guestFolder: "dir", readOnly: true)
+                Tart.DirectoryMount(hostPath: "/tmp/dir", guestFolder: "dir", readOnly: true, tag: "build")
             ],
-            noAudio: true
+            noAudio: true,
+            noGraphics: false,
+            noClipboard: true
         )
         try tart.run(name: "ephemeral", options: options)
         XCTAssertEqual(runner.calls.first, .init(
             executable: "tart",
-            arguments: ["run", "ephemeral", "--no-graphics", "--no-audio", "--dir", "dir:/tmp/dir:ro"],
+            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--dir", "dir:/tmp/dir:ro,tag=build"],
             wait: false
         ))
     }
@@ -56,10 +58,10 @@ final class TartTests: XCTestCase {
         let runner = MockProcessRunner()
         let tart = Tart(processRunner: runner)
         let display = Tart.Display(width: 1920, height: 1080, unit: "px")
-        try tart.set(name: "ephemeral", cpuCores: 4, memoryMb: 4096, display: display)
+        try tart.set(name: "ephemeral", cpuCores: 4, memoryMb: 4096, display: display, displayRefit: true, diskSizeGb: 80)
         XCTAssertEqual(runner.calls.first, .init(
             executable: "tart",
-            arguments: ["set", "ephemeral", "--cpu", "4", "--memory", "4096", "--display", "1920x1080px"],
+            arguments: ["set", "ephemeral", "--cpu", "4", "--memory", "4096", "--display", "1920x1080px", "--display-refit", "--disk-size", "80"],
             wait: true
         ))
     }

@@ -41,12 +41,19 @@ struct Runner {
             logger.info("delete VM \(name, privacy: .public)")
             try? tart.delete(name: name)
         }
-        try applyHardwareConfigIfNeeded(name: name)
+        try applyVMConfigIfNeeded(name: name)
         let runOptions = Tart.RunOptions(
             directoryMounts: config.vm.mounts.map {
-                Tart.DirectoryMount(hostPath: $0.hostPath, guestFolder: $0.guestFolder, readOnly: $0.readOnly)
+                Tart.DirectoryMount(
+                    hostPath: $0.hostPath,
+                    guestFolder: $0.guestFolder,
+                    readOnly: $0.readOnly,
+                    tag: $0.tag
+                )
             },
-            noAudio: config.vm.hardware?.audio == false
+            noAudio: config.vm.hardware?.audio == false,
+            noGraphics: config.vm.run.noGraphics,
+            noClipboard: config.vm.run.noClipboard
         )
         logger.info("boot VM \(name, privacy: .public)")
         try tart.run(name: name, options: runOptions)
@@ -84,15 +91,26 @@ struct Runner {
         }
     }
 
-    private func applyHardwareConfigIfNeeded(name: String) throws {
-        guard let hardware = config.vm.hardware else {
-            return
-        }
-        let display: Tart.Display? = hardware.display.map {
+    private func applyVMConfigIfNeeded(name: String) throws {
+        let hardware = config.vm.hardware
+        let display: Tart.Display? = hardware?.display.map {
             Tart.Display(width: $0.width, height: $0.height, unit: $0.unit?.rawValue)
         }
-        let memoryMb = hardware.ramGb.map { $0 * 1024 }
-        try tart.set(name: name, cpuCores: hardware.cpuCores, memoryMb: memoryMb, display: display)
+        let displayRefit = hardware?.display?.refit
+        let memoryMb = hardware?.ramGb.map { $0 * 1024 }
+        let cpuCores = hardware?.cpuCores
+        let diskSizeGb = config.vm.diskSizeGb
+        guard cpuCores != nil || memoryMb != nil || display != nil || displayRefit != nil || diskSizeGb != nil else {
+            return
+        }
+        try tart.set(
+            name: name,
+            cpuCores: cpuCores,
+            memoryMb: memoryMb,
+            display: display,
+            displayRefit: displayRefit,
+            diskSizeGb: diskSizeGb
+        )
     }
 
     private func execWithRetry(name: String, command: String) async throws -> ProcessResult? {

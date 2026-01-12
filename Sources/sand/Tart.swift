@@ -9,21 +9,30 @@ struct Tart {
         let hostPath: String
         let guestFolder: String
         let readOnly: Bool
+        let tag: String?
 
         var runArgument: String {
-            var value = "\(guestFolder):\(hostPath)"
+            var options: [String] = []
             if readOnly {
-                value += ":ro"
+                options.append("ro")
             }
-            return value
+            if let tag {
+                options.append("tag=\(tag)")
+            }
+            if options.isEmpty {
+                return "\(guestFolder):\(hostPath)"
+            }
+            return "\(guestFolder):\(hostPath):" + options.joined(separator: ",")
         }
     }
 
     struct RunOptions {
         let directoryMounts: [DirectoryMount]
         let noAudio: Bool
+        let noGraphics: Bool
+        let noClipboard: Bool
 
-        static let `default` = RunOptions(directoryMounts: [], noAudio: false)
+        static let `default` = RunOptions(directoryMounts: [], noAudio: false, noGraphics: true, noClipboard: false)
     }
 
     struct Display {
@@ -60,7 +69,14 @@ struct Tart {
         _ = try processRunner.run(executable: "tart", arguments: ["clone", source, name], wait: true)
     }
 
-    func set(name: String, cpuCores: Int?, memoryMb: Int?, display: Display?) throws {
+    func set(
+        name: String,
+        cpuCores: Int?,
+        memoryMb: Int?,
+        display: Display?,
+        displayRefit: Bool?,
+        diskSizeGb: Int?
+    ) throws {
         var arguments = ["set", name]
         if let cpuCores {
             arguments.append(contentsOf: ["--cpu", String(cpuCores)])
@@ -71,6 +87,12 @@ struct Tart {
         if let display {
             arguments.append(contentsOf: ["--display", display.argument])
         }
+        if let displayRefit {
+            arguments.append(displayRefit ? "--display-refit" : "--no-display-refit")
+        }
+        if let diskSizeGb {
+            arguments.append(contentsOf: ["--disk-size", String(diskSizeGb)])
+        }
         guard arguments.count > 2 else {
             return
         }
@@ -78,9 +100,15 @@ struct Tart {
     }
 
     func run(name: String, options: RunOptions = .default) throws {
-        var arguments = ["run", name, "--no-graphics"]
+        var arguments = ["run", name]
+        if options.noGraphics {
+            arguments.append("--no-graphics")
+        }
         if options.noAudio {
             arguments.append("--no-audio")
+        }
+        if options.noClipboard {
+            arguments.append("--no-clipboard")
         }
         for mount in options.directoryMounts {
             arguments.append("--dir")

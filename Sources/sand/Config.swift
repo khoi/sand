@@ -6,11 +6,15 @@ struct Config: Decodable {
         let source: VMSource
         let hardware: Hardware?
         let mounts: [DirectoryMount]
+        let run: RunOptions
+        let diskSizeGb: Int?
 
-        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount]) {
+        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount], run: RunOptions, diskSizeGb: Int?) {
             self.source = source
             self.hardware = hardware
             self.mounts = mounts
+            self.run = run
+            self.diskSizeGb = diskSizeGb
         }
 
         init(from decoder: Decoder) throws {
@@ -18,12 +22,16 @@ struct Config: Decodable {
             self.source = try container.decode(VMSource.self, forKey: .source)
             self.hardware = try container.decodeIfPresent(Hardware.self, forKey: .hardware)
             self.mounts = try container.decodeIfPresent([DirectoryMount].self, forKey: .mounts) ?? []
+            self.run = try container.decodeIfPresent(RunOptions.self, forKey: .run) ?? .default
+            self.diskSizeGb = try container.decodeIfPresent(Int.self, forKey: .diskSizeGb)
         }
 
         private enum CodingKeys: String, CodingKey {
             case source
             case hardware
             case mounts
+            case run
+            case diskSizeGb
         }
     }
 
@@ -93,17 +101,20 @@ struct Config: Decodable {
         let width: Int
         let height: Int
         let unit: Unit?
+        let refit: Bool?
     }
 
     struct DirectoryMount: Decodable {
         let hostPath: String
         let guestFolder: String
         let readOnly: Bool
+        let tag: String?
 
-        init(hostPath: String, guestFolder: String, readOnly: Bool) {
+        init(hostPath: String, guestFolder: String, readOnly: Bool, tag: String?) {
             self.hostPath = hostPath
             self.guestFolder = guestFolder
             self.readOnly = readOnly
+            self.tag = tag
         }
 
         init(from decoder: Decoder) throws {
@@ -111,12 +122,37 @@ struct Config: Decodable {
             self.hostPath = try container.decode(String.self, forKey: .hostPath)
             self.guestFolder = try container.decode(String.self, forKey: .guestFolder)
             self.readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+            self.tag = try container.decodeIfPresent(String.self, forKey: .tag)
         }
 
         private enum CodingKeys: String, CodingKey {
             case hostPath
             case guestFolder
             case readOnly
+            case tag
+        }
+    }
+
+    struct RunOptions: Decodable {
+        let noGraphics: Bool
+        let noClipboard: Bool
+
+        static let `default` = RunOptions(noGraphics: true, noClipboard: false)
+
+        init(noGraphics: Bool, noClipboard: Bool) {
+            self.noGraphics = noGraphics
+            self.noClipboard = noClipboard
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.noGraphics = try container.decodeIfPresent(Bool.self, forKey: .noGraphics) ?? true
+            self.noClipboard = try container.decodeIfPresent(Bool.self, forKey: .noClipboard) ?? false
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case noGraphics
+            case noClipboard
         }
     }
 
@@ -187,10 +223,17 @@ struct Config: Decodable {
             DirectoryMount(
                 hostPath: Config.expandPath(mount.hostPath),
                 guestFolder: mount.guestFolder,
-                readOnly: mount.readOnly
+                readOnly: mount.readOnly,
+                tag: mount.tag
             )
         }
-        let expandedVM = VM(source: vmSource, hardware: vm.hardware, mounts: mounts)
+        let expandedVM = VM(
+            source: vmSource,
+            hardware: vm.hardware,
+            mounts: mounts,
+            run: vm.run,
+            diskSizeGb: vm.diskSizeGb
+        )
         let expandedProvisioner = provisioner.expanded()
         return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter)
     }

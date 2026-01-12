@@ -11,10 +11,20 @@ final class ConfigTests: XCTestCase {
             path: ~/vm
           hardware:
             ramGb: 4
+            display:
+              width: 1920
+              height: 1200
+              unit: px
+              refit: true
           mounts:
             - hostPath: ~/cache
               guestFolder: cache
               readOnly: true
+              tag: build
+          run:
+            noGraphics: false
+            noClipboard: true
+          diskSizeGb: 80
         provisioner:
           type: github
           config:
@@ -37,6 +47,11 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.vm.mounts.first?.hostPath, "\(FileManager.default.homeDirectoryForCurrentUser.path)/cache")
         XCTAssertEqual(config.vm.mounts.first?.guestFolder, "cache")
         XCTAssertEqual(config.vm.mounts.first?.readOnly, true)
+        XCTAssertEqual(config.vm.mounts.first?.tag, "build")
+        XCTAssertEqual(config.vm.run.noGraphics, false)
+        XCTAssertEqual(config.vm.run.noClipboard, true)
+        XCTAssertEqual(config.vm.diskSizeGb, 80)
+        XCTAssertEqual(config.vm.hardware?.display?.refit, true)
         XCTAssertEqual(config.provisioner.type, .github)
         XCTAssertEqual(config.provisioner.github?.organization, "acme")
         XCTAssertEqual(config.provisioner.github?.repository, "repo")
@@ -62,6 +77,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertNil(config.vm.hardware)
         XCTAssertEqual(config.vm.source.type, .oci)
         XCTAssertEqual(config.vm.source.resolvedSource, "ghcr.io/acme/vm:latest")
+        XCTAssertEqual(config.vm.run.noGraphics, true)
+        XCTAssertEqual(config.vm.run.noClipboard, false)
         XCTAssertEqual(config.provisioner.type, .script)
         XCTAssertEqual(config.provisioner.script?.run.contains("Hello World"), true)
     }

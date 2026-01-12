@@ -20,6 +20,15 @@ vm:
     image: ghcr.io/cirruslabs/macos-runner:tahoe
   hardware:
     ramGb: 4
+  run:
+    noGraphics: true
+    noClipboard: false
+  diskSizeGb: 80
+  mounts:
+    - hostPath: ~/ci-cache
+      guestFolder: cache
+      readOnly: false
+      tag: build
 provisioner:
   type: script
   config:
@@ -27,6 +36,14 @@ provisioner:
       echo "Hello World"
       sleep 10
 ```
+
+### VM options
+
+- `vm.run.noGraphics` (default: true)
+- `vm.run.noClipboard` (default: false)
+- `vm.diskSizeGb` (optional)
+- `vm.mounts[].tag` (optional)
+- `vm.hardware.display.refit` (optional)
 
 ### GitHub Actions runner provisioner
 
