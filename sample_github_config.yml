@@ -1,7 +1,7 @@
 vm:
   source:
     type: oci
-    image: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
+    image: ghcr.io/cirruslabs/macos-runner:tahoe
   hardware:
     ramGb: 6
 provisioner:

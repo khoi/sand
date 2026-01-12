@@ -13,6 +13,10 @@ struct Sand: AsyncParsableCommand {
         LoggingSystem.bootstrap { label in
             StreamLogHandler.standardOutput(label: label)
         }
+        let missing = DependencyChecker.missingCommands(["tart", "sshpass", "ssh"])
+        if !missing.isEmpty {
+            throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
+        }
         let config = try Config.load(path: config)
         let processRunner = SystemProcessRunner()
         let tart = Tart(processRunner: processRunner)
