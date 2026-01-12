@@ -13,13 +13,11 @@ func scriptWithExtraLabels() {
         runnerName: "runner-1",
         extraLabels: ["fast", "arm64"]
     )
-    let script = provisioner.script(
-        config: config,
-        runnerToken: "token",
-        downloadURL: URL(string: "https://example.com/runner.tar.gz")!
-    )
-    #expect(script.contains("--labels sand,fast,arm64"))
-    #expect(script.contains("--url https://github.com/org/repo"))
+    let script = provisioner.script(config: config, runnerToken: "token")
+    let joined = script.joined(separator: "\n")
+    #expect(joined.contains("--labels sand,fast,arm64"))
+    #expect(joined.contains("--url https://github.com/org/repo"))
+    #expect(joined.contains("actions/runner/releases/download"))
 }
 
 @Test
@@ -33,11 +31,9 @@ func scriptWithDefaultLabels() {
         runnerName: "runner-1",
         extraLabels: nil
     )
-    let script = provisioner.script(
-        config: config,
-        runnerToken: "token",
-        downloadURL: URL(string: "https://example.com/runner.tar.gz")!
-    )
-    #expect(script.contains("--labels sand"))
-    #expect(script.contains("--url https://github.com/org"))
+    let script = provisioner.script(config: config, runnerToken: "token")
+    let joined = script.joined(separator: "\n")
+    #expect(joined.contains("--labels sand"))
+    #expect(joined.contains("--url https://github.com/org"))
+    #expect(joined.contains("actions-runner-${runner_os}-${runner_arch}"))
 }

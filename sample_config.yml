@@ -1,10 +1,14 @@
-stopAfter: 5
+stopAfter: 2
 vm:
   source:
     type: oci
     image: "ghcr.io/cirruslabs/ubuntu:latest"
   hardware:
     ramGb: 4
+  ssh:
+    user: admin
+    password: admin
+    port: 22
 provisioner:
   type: script
   config:

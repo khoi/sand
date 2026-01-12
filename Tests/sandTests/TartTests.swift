@@ -104,11 +104,3 @@ func preparePullsWhenMissing() throws {
         .init(executable: "tart", arguments: ["pull", "ghcr.io/cirruslabs/macos-tahoe-xcode:latest"], wait: true)
     ])
 }
-
-@Test
-func execArgs() throws {
-    let runner = MockProcessRunner()
-    let tart = Tart(processRunner: runner)
-    _ = try tart.exec(name: "ephemeral", command: "echo 1")
-    #expect(runner.calls.first == .init(executable: "tart", arguments: ["exec", "ephemeral", "/bin/bash", "-lc", "echo 1"], wait: true))
-}

@@ -1,0 +1,14 @@
+vm:
+  source:
+    type: oci
+    image: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
+  hardware:
+    ramGb: 6
+provisioner:
+  type: github
+  config:
+    appId: 2614375
+    organization: khoi
+    repository: supaimg
+    privateKeyPath: ~/mac-mini-tart.2026-01-07.private-key.pem
+    runnerName: sandrunner-1

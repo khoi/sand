@@ -1,5 +1,3 @@
-import Foundation
-
 struct GitHubProvisionerConfig: Decodable {
     let appId: Int
     let organization: String
@@ -26,16 +24,37 @@ struct GitHubProvisionerConfig: Decodable {
 }
 
 struct GitHubProvisioner {
-    func script(config: GitHubProvisionerConfig, runnerToken: String, downloadURL: URL) -> String {
+    func script(config: GitHubProvisionerConfig, runnerToken: String) -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
         return [
-            "curl -so actions-runner.tar.gz -L \(downloadURL.absoluteString)",
+            """
+os=$(uname -s)
+case "$os" in
+  Darwin) runner_os=osx ;;
+  Linux) runner_os=linux ;;
+  *) echo "unsupported os: $os"; exit 1 ;;
+esac
+arch=$(uname -m)
+case "$arch" in
+  x86_64|amd64) runner_arch=x64 ;;
+  arm64|aarch64) runner_arch=arm64 ;;
+  armv7l|armv6l) runner_arch=arm ;;
+  *) echo "unsupported arch: $arch"; exit 1 ;;
+esac
+version="2.330.0"
+asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
+download_url=https://github.com/actions/runner/releases/download/v${version}/${asset}
+echo $download_url
+curl -fsSL -o actions-runner.tar.gz -L ${download_url}
+""",
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
             "tar xzf ./actions-runner.tar.gz -C ~/actions-runner",
+            "echo \"Runner downloaded and extracted\"",
             "~/actions-runner/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)",
+            "echo \"Runner script downloaded, starting ~/actions-runner/run.sh\"",
             "~/actions-runner/run.sh"
-        ].joined(separator: "\n")
+        ]
     }
 
     private func labelsString(extraLabels: [String]?) -> String {

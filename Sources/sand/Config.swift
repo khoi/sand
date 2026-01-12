@@ -8,13 +8,15 @@ struct Config: Decodable {
         let mounts: [DirectoryMount]
         let run: RunOptions
         let diskSizeGb: Int?
+        let ssh: SSH
 
-        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount], run: RunOptions, diskSizeGb: Int?) {
+        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount], run: RunOptions, diskSizeGb: Int?, ssh: SSH) {
             self.source = source
             self.hardware = hardware
             self.mounts = mounts
             self.run = run
             self.diskSizeGb = diskSizeGb
+            self.ssh = ssh
         }
 
         init(from decoder: Decoder) throws {
@@ -24,6 +26,7 @@ struct Config: Decodable {
             self.mounts = try container.decodeIfPresent([DirectoryMount].self, forKey: .mounts) ?? []
             self.run = try container.decodeIfPresent(RunOptions.self, forKey: .run) ?? .default
             self.diskSizeGb = try container.decodeIfPresent(Int.self, forKey: .diskSizeGb)
+            self.ssh = try container.decodeIfPresent(SSH.self, forKey: .ssh) ?? .standard
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -32,6 +35,7 @@ struct Config: Decodable {
             case mounts
             case run
             case diskSizeGb
+            case ssh
         }
     }
 
@@ -156,6 +160,32 @@ struct Config: Decodable {
         }
     }
 
+    struct SSH: Decodable {
+        let user: String
+        let password: String
+        let port: Int
+        static let standard = SSH(user: "admin", password: "admin", port: 22)
+
+        init(user: String, password: String, port: Int) {
+            self.user = user
+            self.password = password
+            self.port = port
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.user = try container.decodeIfPresent(String.self, forKey: .user) ?? "admin"
+            self.password = try container.decodeIfPresent(String.self, forKey: .password) ?? "admin"
+            self.port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 22
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case user
+            case password
+            case port
+        }
+    }
+
     struct Provisioner: Decodable {
         enum ProvisionerType: String, Decodable {
             case script
@@ -232,7 +262,8 @@ struct Config: Decodable {
             hardware: vm.hardware,
             mounts: mounts,
             run: vm.run,
-            diskSizeGb: vm.diskSizeGb
+            diskSizeGb: vm.diskSizeGb,
+            ssh: vm.ssh
         )
         let expandedProvisioner = provisioner.expanded()
         return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter)

@@ -9,7 +9,6 @@ extension URLSession: URLSessionProtocol {}
 enum GitHubServiceError: Error {
     case invalidResponse
     case httpError(status: Int, body: String)
-    case missingDownloadURL
 }
 
 struct GitHubService {
@@ -25,11 +24,6 @@ struct GitHubService {
         let token: String
     }
 
-    struct RunnerDownload: Decodable {
-        let os: String
-        let architecture: String
-        let downloadUrl: URL
-    }
 
     let auth: GitHubAuthenticating
     let session: URLSessionProtocol
@@ -44,18 +38,6 @@ struct GitHubService {
         return tokenResponse.token
     }
 
-    func runnerDownloadURL() async throws -> URL {
-        let installationId = try await installationID()
-        let accessToken = try await installationAccessToken(installationId: installationId)
-        let downloads: [RunnerDownload] = try await request(path: downloadsPath(), method: "GET", token: accessToken)
-        if let match = downloads.first(where: { $0.architecture == "arm64" && $0.os == "osx" }) {
-            return match.downloadUrl
-        }
-        if let first = downloads.first {
-            return first.downloadUrl
-        }
-        throw GitHubServiceError.missingDownloadURL
-    }
 
     private func installationID() async throws -> Int {
         let token = try auth.token(now: Date())
@@ -103,10 +85,4 @@ struct GitHubService {
         return "/orgs/\(organization)/actions/runners/registration-token"
     }
 
-    private func downloadsPath() -> String {
-        if let repository {
-            return "/repos/\(organization)/\(repository)/actions/runners/downloads"
-        }
-        return "/orgs/\(organization)/actions/runners/downloads"
-    }
 }

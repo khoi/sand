@@ -26,6 +26,10 @@ func parsesConfigAndExpandsPaths() throws {
         noGraphics: false
         noClipboard: true
       diskSizeGb: 80
+      ssh:
+        user: admin
+        password: admin
+        port: 22
     provisioner:
       type: github
       config:
@@ -50,6 +54,9 @@ func parsesConfigAndExpandsPaths() throws {
     #expect(config.vm.run.noGraphics == false)
     #expect(config.vm.run.noClipboard == true)
     #expect(config.vm.diskSizeGb == 80)
+    #expect(config.vm.ssh.user == "admin")
+    #expect(config.vm.ssh.password == "admin")
+    #expect(config.vm.ssh.port == 22)
     #expect(config.vm.hardware?.display?.refit == true)
     #expect(config.provisioner.type == .github)
     #expect(config.provisioner.github?.organization == "acme")
@@ -65,6 +72,10 @@ func scriptProvisioner() throws {
       source:
         type: oci
         image: ghcr.io/acme/vm:latest
+      ssh:
+        user: runner
+        password: secret
+        port: 2222
     provisioner:
       type: script
       config:
@@ -79,6 +90,9 @@ func scriptProvisioner() throws {
     #expect(config.vm.source.resolvedSource == "ghcr.io/acme/vm:latest")
     #expect(config.vm.run.noGraphics == true)
     #expect(config.vm.run.noClipboard == false)
+    #expect(config.vm.ssh.user == "runner")
+    #expect(config.vm.ssh.password == "secret")
+    #expect(config.vm.ssh.port == 2222)
     #expect(config.provisioner.type == .script)
     #expect(config.provisioner.script?.run.contains("Hello World") == true)
 }

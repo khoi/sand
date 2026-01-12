@@ -7,10 +7,8 @@ struct Runner {
     let provisioner: GitHubProvisioner
     let config: Config
     let shutdownCoordinator: VMShutdownCoordinator
-    private let logger = Logger(label: "sand.runner")
+    private let logger = Logger(label: "host")
     private let vmLogger = Logger(label: "vm")
-    private let execRetryAttempts = 12
-    private let execRetryDelaySeconds: UInt64 = 5
 
     enum RunnerError: Error {
         case missingGitHub
@@ -33,7 +31,7 @@ struct Runner {
     }
 
     private func runOnce() async throws {
-        let name = "ephemeral"
+        let name = "sandrunner"
         let source = config.vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
@@ -62,16 +60,19 @@ struct Runner {
         logger.info("wait for VM IP")
         let ip = try tart.ip(name: name, wait: 60)
         logger.info("VM IP \(ip)")
+        let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: config.vm.ssh)
+        try await waitForSSH(ssh: ssh)
         switch config.provisioner.type {
         case .script:
             guard let run = config.provisioner.script?.run else {
                 throw RunnerError.missingScript
             }
             logger.info("run script provisioner")
-            let result = try await execWithRetry(name: name, command: run)
+            logScript(run)
+            let result = try ssh.exec(command: run)
             if let result {
-                logLines(logger: vmLogger, "[stdout] \(result.stdout)", level: .info)
-                logLines(logger: vmLogger, "[stderr] \(result.stderr)", level: .info)
+                logIfNonEmpty(label: "stdout", text: result.stdout)
+                logIfNonEmpty(label: "stderr", text: result.stderr)
             }
             logger.info("script provisioner finished")
         case .github:
@@ -80,9 +81,15 @@ struct Runner {
             }
             logger.info("run github provisioner")
             let token = try await github.runnerRegistrationToken()
-            let downloadURL = try await github.runnerDownloadURL()
-            let script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
-            _ = try await execWithRetry(name: name, command: script)
+            let commands = provisioner.script(config: githubConfig, runnerToken: token)
+            for command in commands {
+                logScript(command)
+                let result = try ssh.exec(command: command)
+                if let result {
+                    logIfNonEmpty(label: "stdout", text: result.stdout)
+                    logIfNonEmpty(label: "stderr", text: result.stderr)
+                }
+            }
             logger.info("github provisioner finished")
         }
     }
@@ -109,32 +116,34 @@ struct Runner {
         )
     }
 
-    private func execWithRetry(name: String, command: String) async throws -> ProcessResult? {
-        for attempt in 1...execRetryAttempts {
+    private func waitForSSH(ssh: SSHClient) async throws {
+        var attempt = 0
+        while true {
+            attempt += 1
             do {
-                return try tart.exec(name: name, command: command)
+                try ssh.checkConnection()
+                return
             } catch {
-                guard isGuestAgentUnavailable(error), attempt < execRetryAttempts else {
-                    throw error
-                }
-                logger.info("tart exec failed (guest agent not ready), retrying in \(self.execRetryDelaySeconds)s (attempt \(attempt + 1) of \(self.execRetryAttempts))")
-                try await Task.sleep(nanoseconds: execRetryDelaySeconds * 1_000_000_000)
+                logger.info("SSH not ready, retrying in 1s (attempt \(attempt))")
+                try await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
-        return nil
-    }
-
-    private func isGuestAgentUnavailable(_ error: Error) -> Bool {
-        guard case let ProcessRunnerError.failed(_, _, stderr, _) = error else {
-            return false
-        }
-        return stderr.localizedCaseInsensitiveContains("GRPCConnectionPoolError")
-            || stderr.localizedCaseInsensitiveContains("guest agent")
     }
 
     private func logLines(logger: Logger, _ text: String, level: Logger.Level) {
         for line in text.split(whereSeparator: \.isNewline) {
             logger.log(level: level, "\(line)")
         }
+    }
+
+    private func logIfNonEmpty(label: String, text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        logLines(logger: vmLogger, "[\(label)] \(text)", level: .info)
+    }
+
+    private func logScript(_ script: String) {
+        vmLogger.log(level: .info, "[executing]\n\(script)")
     }
 }

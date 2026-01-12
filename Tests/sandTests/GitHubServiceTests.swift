@@ -39,19 +39,3 @@ func repoLevelPaths() async throws {
         "/repos/org/repo/actions/runners/registration-token"
     ])
 }
-
-@Test
-func orgLevelDownloads() async throws {
-    let session = MockSession()
-    session.responses["/orgs/org/installation"] = (Data("{\"id\":2}".utf8), 200)
-    session.responses["/app/installations/2/access_tokens"] = (Data("{\"token\":\"access\"}".utf8), 200)
-    session.responses["/orgs/org/actions/runners/downloads"] = (Data("[{\"os\":\"osx\",\"architecture\":\"arm64\",\"download_url\":\"https://example.com/runner.tar.gz\"}]".utf8), 200)
-    let service = GitHubService(auth: MockAuth(), session: session, organization: "org", repository: nil)
-    let url = try await service.runnerDownloadURL()
-    #expect(url.absoluteString == "https://example.com/runner.tar.gz")
-    #expect(session.requests.map { $0.url?.path ?? "" } == [
-        "/orgs/org/installation",
-        "/app/installations/2/access_tokens",
-        "/orgs/org/actions/runners/downloads"
-    ])
-}
