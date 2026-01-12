@@ -7,6 +7,7 @@ struct Runner {
     let provisioner: GitHubProvisioner
     let config: Config
     private let logger = Logger(label: "sand.runner")
+    private let vmLogger = Logger(label: "vm")
     private let execRetryAttempts = 12
     private let execRetryDelaySeconds: UInt64 = 5
 
@@ -72,8 +73,8 @@ struct Runner {
             logger.info("run script provisioner")
             let result = try await execWithRetry(name: name, command: run)
             if let result {
-                logLines("[VM stdout] \(result.stdout)", level: .info)
-                logLines("[VM stderr] \(result.stderr)", level: .info)
+                logLines(logger: vmLogger, "[VM stdout] \(result.stdout)", level: .info)
+                logLines(logger: vmLogger, "[VM stderr] \(result.stderr)", level: .info)
             }
             logger.info("script provisioner finished")
         case .github:
@@ -134,7 +135,7 @@ struct Runner {
             || stderr.localizedCaseInsensitiveContains("guest agent")
     }
 
-    private func logLines(_ text: String, level: Logger.Level) {
+    private func logLines(logger: Logger, _ text: String, level: Logger.Level) {
         for line in text.split(whereSeparator: \.isNewline) {
             logger.log(level: level, "\(line)")
         }
