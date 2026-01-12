@@ -57,6 +57,30 @@ sand runs an infinite loop. Stop it with Ctrl+C.
 
 Each loop iteration does the following:
 
+```
+sand
+  |
+  v
+prepare source (pull if missing)
+  |
+  v
+clone -> run VM (ephemeral)
+  |
+  v
+get IP
+  |
+  v
+provision
+  |-- script: tart exec /bin/bash -lc "<run>"
+  `-- github: ssh -> install + config runner -> run.sh
+  |
+  v
+stop + delete ephemeral
+  |
+  v
+repeat
+```
+
 1. Pulls the OCI image if it is not already present locally.
 2. Clones the source VM into a local VM named `ephemeral`.
 3. Starts the VM headless.
