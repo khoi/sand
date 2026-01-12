@@ -1,0 +1,7 @@
+stopAfter: 3
+source: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
+provisioner:
+  type: script
+  config:
+    run: |
+      echo "Hello World"

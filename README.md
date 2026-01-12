@@ -99,6 +99,7 @@ tart delete ephemeral
 
 ```
 swift test
+swift run sand --config Tests/sample_config.yml
 ```
 
 ## Acknowledgements
