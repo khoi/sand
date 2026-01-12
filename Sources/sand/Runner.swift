@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct Runner {
     let tart: Tart
@@ -6,6 +7,7 @@ struct Runner {
     let provisioner: GitHubProvisioner
     let ssh: SSHExecutor
     let config: Config
+    private let logger = Logger(subsystem: "sand", category: "runner")
 
     enum RunnerError: Error {
         case missingGitHub
@@ -20,29 +22,29 @@ struct Runner {
 
     private func runOnce() async throws {
         let name = "ephemeral"
-        info("prepare source \(config.source)")
+        logger.info("prepare source \(self.config.source, privacy: .public)")
         try tart.prepare(source: config.source)
-        info("clone VM \(name) from \(config.source)")
+        logger.info("clone VM \(name, privacy: .public) from \(self.config.source, privacy: .public)")
         try tart.clone(source: config.source, name: name)
         defer {
-            info("delete VM \(name)")
+            logger.info("delete VM \(name, privacy: .public)")
             try? tart.delete(name: name)
         }
-        info("boot VM \(name)")
+        logger.info("boot VM \(name, privacy: .public)")
         try tart.run(name: name)
         defer {
-            info("stop VM \(name)")
+            logger.info("stop VM \(name, privacy: .public)")
             try? tart.stop(name: name)
         }
-        info("wait for VM IP")
+        logger.info("wait for VM IP")
         let ip = try tart.ip(name: name, wait: 60)
-        info("VM IP \(ip)")
+        logger.info("VM IP \(ip, privacy: .public)")
         switch config.provisioner.type {
         case .script:
             guard let run = config.provisioner.script?.run else {
                 throw RunnerError.missingScript
             }
-            info("run script provisioner")
+            logger.info("run script provisioner")
             let result = try tart.exec(name: name, command: run)
             if let stdout = result?.stdout.data(using: .utf8) {
                 FileHandle.standardOutput.write(stdout)
@@ -50,21 +52,17 @@ struct Runner {
             if let stderr = result?.stderr.data(using: .utf8) {
                 FileHandle.standardError.write(stderr)
             }
-            info("script provisioner finished")
+            logger.info("script provisioner finished")
         case .github:
             guard let github, let githubConfig = config.provisioner.github else {
                 throw RunnerError.missingGitHub
             }
-            info("run github provisioner")
+            logger.info("run github provisioner")
             let token = try await github.runnerRegistrationToken()
             let downloadURL = try await github.runnerDownloadURL()
             let script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
             try await ssh.execute(host: ip, username: config.ssh.username, password: config.ssh.password, command: script)
-            info("github provisioner finished")
+            logger.info("github provisioner finished")
         }
-    }
-
-    private func info(_ message: String) {
-        print("[INFO] \(message)")
     }
 }
