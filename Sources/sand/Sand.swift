@@ -7,15 +7,7 @@ struct Sand: AsyncParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = "sand.yml"
 
-    @Flag(name: .long, help: "Enable verbose OSLog output (sets OS_LOG_LEVEL=debug, OS_ACTIVITY_MODE=debug, OS_ACTIVITY_DT_MODE=1).")
-    var oslogDebug: Bool = false
-
     mutating func run() async throws {
-        if oslogDebug {
-            setenv("OS_LOG_LEVEL", "debug", 1)
-            setenv("OS_ACTIVITY_MODE", "debug", 1)
-            setenv("OS_ACTIVITY_DT_MODE", "1", 1)
-        }
         let config = try Config.load(path: config)
         let processRunner = SystemProcessRunner()
         let tart = Tart(processRunner: processRunner)
