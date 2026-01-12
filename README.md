@@ -1,6 +1,6 @@
 # sand
 
-sand is a Swift CLI that runs ephemeral macOS VMs via Tart and executes a provisioner on each VM. The provisioner can be a script (run inside the VM with tart exec) or a GitHub Actions runner setup (run over SSH).
+sand is a Swift CLI that runs ephemeral macOS VMs via Tart and executes a provisioner on each VM. The provisioner can be a script or a GitHub Actions runner setup, both run inside the VM with tart exec.
 
 ## Requirements
 
@@ -22,9 +22,6 @@ provisioner:
     run: |
       echo "Hello World"
       sleep 10
-ssh:
-  username: admin
-  password: admin
 ```
 
 ### GitHub Actions runner provisioner
@@ -40,9 +37,6 @@ provisioner:
     privateKeyPath: ~/my-app.private-key.pem
     runnerName: runner-1
     extraLabels: [custom]
-ssh:
-  username: admin
-  password: admin
 ```
 
 ## Usage
@@ -72,7 +66,7 @@ get IP
   v
 provision
   |-- script: tart exec /bin/bash -lc "<run>"
-  `-- github: ssh -> install + config runner -> run.sh
+  `-- github: tart exec -> install + config runner -> run.sh
   |
   v
 stop + delete ephemeral
@@ -88,7 +82,7 @@ repeat
 5. Executes the provisioner:
    - Script provisioner uses `tart exec` to run the script in the VM.
    - Script output is forwarded to sand stdout/stderr after the command finishes.
-   - GitHub provisioner uses SSH to install and run the GitHub Actions runner.
+   - GitHub provisioner uses `tart exec` to install and run the GitHub Actions runner.
 6. Stops and deletes the `ephemeral` VM.
 
 If the process is interrupted, you can clean up manually:

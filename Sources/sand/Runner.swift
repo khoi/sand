@@ -5,7 +5,6 @@ struct Runner {
     let tart: Tart
     let github: GitHubService?
     let provisioner: GitHubProvisioner
-    let ssh: SSHExecutor
     let config: Config
     private let logger = Logger(subsystem: "sand", category: "runner")
 
@@ -61,7 +60,7 @@ struct Runner {
             let token = try await github.runnerRegistrationToken()
             let downloadURL = try await github.runnerDownloadURL()
             let script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
-            try await ssh.execute(host: ip, username: config.ssh.username, password: config.ssh.password, command: script)
+            _ = try tart.exec(name: name, command: script)
             logger.info("github provisioner finished")
         }
     }

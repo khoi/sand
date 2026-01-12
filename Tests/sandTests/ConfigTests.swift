@@ -14,9 +14,6 @@ final class ConfigTests: XCTestCase {
             privateKeyPath: ~/key.pem
             runnerName: runner-1
             extraLabels: [fast, arm64]
-        ssh:
-          username: admin
-          password: admin
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
@@ -38,9 +35,6 @@ final class ConfigTests: XCTestCase {
             organization: acme
             privateKeyPath: /tmp/key.pem
             runnerName: runner-1
-        ssh:
-          username: admin
-          password: admin
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
@@ -57,9 +51,6 @@ final class ConfigTests: XCTestCase {
             run: |
               echo "Hello World"
               sleep 1
-        ssh:
-          username: admin
-          password: admin
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)

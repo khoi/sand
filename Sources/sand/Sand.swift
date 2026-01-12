@@ -24,8 +24,7 @@ struct Sand: AsyncParsableCommand {
             github = nil
         }
         let provisioner = GitHubProvisioner()
-        let ssh = SSHExecutor()
-        let runner = Runner(tart: tart, github: github, provisioner: provisioner, ssh: ssh, config: config)
+        let runner = Runner(tart: tart, github: github, provisioner: provisioner, config: config)
         try await runner.run()
     }
 }

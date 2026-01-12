@@ -2,11 +2,6 @@ import Foundation
 import Yams
 
 struct Config: Decodable {
-    struct SSH: Decodable {
-        let username: String
-        let password: String
-    }
-
     struct Provisioner: Decodable {
         enum ProvisionerType: String, Decodable {
             case script
@@ -57,8 +52,6 @@ struct Config: Decodable {
 
     let source: String
     let provisioner: Provisioner
-    let ssh: SSH
-
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
         let contents = try String(contentsOfFile: expandedPath, encoding: .utf8)
@@ -70,7 +63,7 @@ struct Config: Decodable {
     private func expanded() -> Config {
         let source = Config.expandSource(self.source)
         let provisioner = self.provisioner.expanded()
-        return Config(source: source, provisioner: provisioner, ssh: ssh)
+        return Config(source: source, provisioner: provisioner)
     }
 
     private static func expandPath(_ path: String) -> String {
