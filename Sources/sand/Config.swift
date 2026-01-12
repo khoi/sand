@@ -5,6 +5,26 @@ struct Config: Decodable {
     struct VM: Decodable {
         let source: VMSource
         let hardware: Hardware?
+        let mounts: [DirectoryMount]
+
+        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount]) {
+            self.source = source
+            self.hardware = hardware
+            self.mounts = mounts
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.source = try container.decode(VMSource.self, forKey: .source)
+            self.hardware = try container.decodeIfPresent(Hardware.self, forKey: .hardware)
+            self.mounts = try container.decodeIfPresent([DirectoryMount].self, forKey: .mounts) ?? []
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case source
+            case hardware
+            case mounts
+        }
     }
 
     struct VMSource: Decodable {
@@ -58,10 +78,92 @@ struct Config: Decodable {
     }
 
     struct Hardware: Decodable {
-        let ramGb: Int
+        let ramGb: Int?
+        let cpuCores: Int?
+        let display: Display?
+        let audio: Bool?
+    }
+
+    struct Display: Decodable {
+        enum Unit: String, Decodable {
+            case pt
+            case px
+        }
+
+        let width: Int
+        let height: Int
+        let unit: Unit?
+    }
+
+    struct DirectoryMount: Decodable {
+        let hostPath: String
+        let guestFolder: String
+        let readOnly: Bool
+
+        init(hostPath: String, guestFolder: String, readOnly: Bool) {
+            self.hostPath = hostPath
+            self.guestFolder = guestFolder
+            self.readOnly = readOnly
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.hostPath = try container.decode(String.self, forKey: .hostPath)
+            self.guestFolder = try container.decode(String.self, forKey: .guestFolder)
+            self.readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case hostPath
+            case guestFolder
+            case readOnly
+        }
+    }
+
+    struct Provisioner: Decodable {
+        enum ProvisionerType: String, Decodable {
+            case script
+            case github
+        }
+
+        struct Script: Decodable {
+            let run: String
+        }
+
+        typealias GitHub = GitHubProvisionerConfig
+
+        let type: ProvisionerType
+        let script: Script?
+        let github: GitHub?
+
+        init(type: ProvisionerType, script: Script?, github: GitHub?) {
+            self.type = type
+            self.script = script
+            self.github = github
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let type = try container.decode(ProvisionerType.self, forKey: .type)
+            switch type {
+            case .script:
+                let script = try container.decode(Script.self, forKey: .config)
+                self.init(type: type, script: script, github: nil)
+            case .github:
+                let github = try container.decode(GitHub.self, forKey: .config)
+                self.init(type: type, script: nil, github: github)
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case type
+            case config
+        }
     }
 
     let vm: VM
+    let provisioner: Provisioner
+    let stopAfter: Int?
 
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
@@ -72,30 +174,62 @@ struct Config: Decodable {
     }
 
     private func expanded() -> Config {
+        let vmSource: VMSource
         switch vm.source.type {
         case .oci:
-            return self
+            vmSource = vm.source
         case .local:
             let expandedPath = Config.expandFileURL(vm.source.path ?? "")
-            let source = VMSource(type: .local, image: nil, path: expandedPath)
-            let vm = VM(source: source, hardware: vm.hardware)
-            return Config(vm: vm)
+            vmSource = VMSource(type: .local, image: nil, path: expandedPath)
         }
+
+        let mounts = vm.mounts.map { mount in
+            DirectoryMount(
+                hostPath: Config.expandPath(mount.hostPath),
+                guestFolder: mount.guestFolder,
+                readOnly: mount.readOnly
+            )
+        }
+        let expandedVM = VM(source: vmSource, hardware: vm.hardware, mounts: mounts)
+        let expandedProvisioner = provisioner.expanded()
+        return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter)
     }
 
-    private static func expandPath(_ path: String) -> String {
+    fileprivate static func expandPath(_ path: String) -> String {
         if path.hasPrefix("~") {
             return (path as NSString).expandingTildeInPath
         }
         return path
     }
 
-    private static func expandFileURL(_ path: String) -> String {
+    fileprivate static func expandFileURL(_ path: String) -> String {
         let prefix = "file://"
         if path.hasPrefix(prefix) {
             let rawPath = String(path.dropFirst(prefix.count))
             return prefix + expandPath(rawPath)
         }
         return prefix + expandPath(path)
+    }
+}
+
+extension Config.Provisioner {
+    func expanded() -> Config.Provisioner {
+        switch type {
+        case .script:
+            return self
+        case .github:
+            guard let github else {
+                return self
+            }
+            let expanded = GitHubProvisionerConfig(
+                appId: github.appId,
+                organization: github.organization,
+                repository: github.repository,
+                privateKeyPath: Config.expandPath(github.privateKeyPath),
+                runnerName: github.runnerName,
+                extraLabels: github.extraLabels
+            )
+            return Config.Provisioner(type: type, script: nil, github: expanded)
+        }
     }
 }

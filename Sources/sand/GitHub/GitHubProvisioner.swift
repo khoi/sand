@@ -1,10 +1,28 @@
 import Foundation
 
-struct GitHubProvisionerConfig {
+struct GitHubProvisionerConfig: Decodable {
+    let appId: Int
     let organization: String
     let repository: String?
+    let privateKeyPath: String
     let runnerName: String
     let extraLabels: [String]?
+
+    init(
+        appId: Int,
+        organization: String,
+        repository: String?,
+        privateKeyPath: String,
+        runnerName: String,
+        extraLabels: [String]?
+    ) {
+        self.appId = appId
+        self.organization = organization
+        self.repository = repository
+        self.privateKeyPath = privateKeyPath
+        self.runnerName = runnerName
+        self.extraLabels = extraLabels
+    }
 }
 
 struct GitHubProvisioner {

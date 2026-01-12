@@ -5,6 +5,38 @@ enum TartError: Error {
 }
 
 struct Tart {
+    struct DirectoryMount: Equatable {
+        let hostPath: String
+        let guestFolder: String
+        let readOnly: Bool
+
+        var runArgument: String {
+            var value = "\(guestFolder):\(hostPath)"
+            if readOnly {
+                value += ":ro"
+            }
+            return value
+        }
+    }
+
+    struct RunOptions {
+        let directoryMounts: [DirectoryMount]
+        let noAudio: Bool
+
+        static let `default` = RunOptions(directoryMounts: [], noAudio: false)
+    }
+
+    struct Display {
+        let width: Int
+        let height: Int
+        let unit: String?
+
+        var argument: String {
+            let suffix = unit.map { $0 } ?? ""
+            return "\(width)x\(height)\(suffix)"
+        }
+    }
+
     let processRunner: ProcessRunning
 
     init(processRunner: ProcessRunning) {
@@ -28,8 +60,33 @@ struct Tart {
         _ = try processRunner.run(executable: "tart", arguments: ["clone", source, name], wait: true)
     }
 
-    func run(name: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["run", name, "--no-graphics"], wait: false)
+    func set(name: String, cpuCores: Int?, memoryMb: Int?, display: Display?) throws {
+        var arguments = ["set", name]
+        if let cpuCores {
+            arguments.append(contentsOf: ["--cpu", String(cpuCores)])
+        }
+        if let memoryMb {
+            arguments.append(contentsOf: ["--memory", String(memoryMb)])
+        }
+        if let display {
+            arguments.append(contentsOf: ["--display", display.argument])
+        }
+        guard arguments.count > 2 else {
+            return
+        }
+        _ = try processRunner.run(executable: "tart", arguments: arguments, wait: true)
+    }
+
+    func run(name: String, options: RunOptions = .default) throws {
+        var arguments = ["run", name, "--no-graphics"]
+        if options.noAudio {
+            arguments.append("--no-audio")
+        }
+        for mount in options.directoryMounts {
+            arguments.append("--dir")
+            arguments.append(mount.runArgument)
+        }
+        _ = try processRunner.run(executable: "tart", arguments: arguments, wait: false)
     }
 
     func ip(name: String, wait: Int) throws -> String {

@@ -5,8 +5,10 @@ final class GitHubProvisionerTests: XCTestCase {
     func testScriptWithExtraLabels() {
         let provisioner = GitHubProvisioner()
         let config = GitHubProvisionerConfig(
+            appId: 1,
             organization: "org",
             repository: "repo",
+            privateKeyPath: "/tmp/key.pem",
             runnerName: "runner-1",
             extraLabels: ["fast", "arm64"]
         )
@@ -18,8 +20,10 @@ final class GitHubProvisionerTests: XCTestCase {
     func testScriptWithDefaultLabels() {
         let provisioner = GitHubProvisioner()
         let config = GitHubProvisionerConfig(
+            appId: 1,
             organization: "org",
             repository: nil,
+            privateKeyPath: "/tmp/key.pem",
             runnerName: "runner-1",
             extraLabels: nil
         )

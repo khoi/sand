@@ -1,6 +1,12 @@
+stopAfter: 1
 vm:
   source:
     type: oci
     image: "ghcr.io/cirruslabs/macos-runner:tahoe"
   hardware:
     ramGb: 4
+provisioner:
+  type: script
+  config:
+    run: |
+      echo "Hello World"

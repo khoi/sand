@@ -35,6 +35,35 @@ final class TartTests: XCTestCase {
         XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics"], wait: false))
     }
 
+    func testRunArgsWithOptions() throws {
+        let runner = MockProcessRunner()
+        let tart = Tart(processRunner: runner)
+        let options = Tart.RunOptions(
+            directoryMounts: [
+                Tart.DirectoryMount(hostPath: "/tmp/dir", guestFolder: "dir", readOnly: true)
+            ],
+            noAudio: true
+        )
+        try tart.run(name: "ephemeral", options: options)
+        XCTAssertEqual(runner.calls.first, .init(
+            executable: "tart",
+            arguments: ["run", "ephemeral", "--no-graphics", "--no-audio", "--dir", "dir:/tmp/dir:ro"],
+            wait: false
+        ))
+    }
+
+    func testSetArgs() throws {
+        let runner = MockProcessRunner()
+        let tart = Tart(processRunner: runner)
+        let display = Tart.Display(width: 1920, height: 1080, unit: "px")
+        try tart.set(name: "ephemeral", cpuCores: 4, memoryMb: 4096, display: display)
+        XCTAssertEqual(runner.calls.first, .init(
+            executable: "tart",
+            arguments: ["set", "ephemeral", "--cpu", "4", "--memory", "4096", "--display", "1920x1080px"],
+            wait: true
+        ))
+    }
+
     func testIPArgs() throws {
         let runner = MockProcessRunner()
         runner.results = [ProcessResult(stdout: "10.0.0.1\n", stderr: "", exitCode: 0)]
