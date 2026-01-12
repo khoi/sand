@@ -13,7 +13,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
-        .package(url: "https://github.com/Kitura/Swift-JWT.git", from: "4.0.0")
+        .package(url: "https://github.com/Kitura/Swift-JWT.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-testing.git", from: "0.6.0")
     ],
     targets: [
         .executableTarget(
@@ -26,7 +27,10 @@ let package = Package(
         ),
         .testTarget(
             name: "sandTests",
-            dependencies: ["sand"]
+            dependencies: [
+                "sand",
+                .product(name: "Testing", package: "swift-testing")
+            ]
         )
     ]
 )
