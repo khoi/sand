@@ -71,7 +71,7 @@ final class TartTests: XCTestCase {
     func testExecArgs() throws {
         let runner = MockProcessRunner()
         let tart = Tart(processRunner: runner)
-        try tart.exec(name: "ephemeral", command: "echo 1")
+        _ = try tart.exec(name: "ephemeral", command: "echo 1")
         XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["exec", "ephemeral", "/bin/bash", "-lc", "echo 1"], wait: true))
     }
 }

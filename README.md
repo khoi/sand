@@ -78,10 +78,7 @@ provision
 stop + delete ephemeral
   |
   v
-repeat ───────────────────────────────┐
-^                                     |
-|                                     |
-└─────────────────────────────────────┘
+repeat
 ```
 
 1. Pulls the OCI image if it is not already present locally.
@@ -90,6 +87,7 @@ repeat ────────────────────────�
 4. Retrieves the VM IP address.
 5. Executes the provisioner:
    - Script provisioner uses `tart exec` to run the script in the VM.
+   - Script output is forwarded to sand stdout/stderr after the command finishes.
    - GitHub provisioner uses SSH to install and run the GitHub Actions runner.
 6. Stops and deletes the `ephemeral` VM.
 

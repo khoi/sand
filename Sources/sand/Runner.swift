@@ -35,7 +35,13 @@ struct Runner {
             guard let run = config.provisioner.script?.run else {
                 throw RunnerError.missingScript
             }
-            try tart.exec(name: name, command: run)
+            let result = try tart.exec(name: name, command: run)
+            if let stdout = result?.stdout.data(using: .utf8) {
+                FileHandle.standardOutput.write(stdout)
+            }
+            if let stderr = result?.stderr.data(using: .utf8) {
+                FileHandle.standardError.write(stderr)
+            }
         case .github:
             guard let github, let githubConfig = config.provisioner.github else {
                 throw RunnerError.missingGitHub

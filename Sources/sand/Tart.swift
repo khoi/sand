@@ -49,8 +49,8 @@ struct Tart {
         _ = try processRunner.run(executable: "tart", arguments: ["delete", name], wait: true)
     }
 
-    func exec(name: String, command: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["exec", name, "/bin/bash", "-lc", command], wait: true)
+    func exec(name: String, command: String) throws -> ProcessResult? {
+        return try processRunner.run(executable: "tart", arguments: ["exec", name, "/bin/bash", "-lc", command], wait: true)
     }
 
     private func isOCISource(_ source: String) -> Bool {
