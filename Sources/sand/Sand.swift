@@ -7,8 +7,7 @@ import Logging
 @available(macOS 14.0, *)
 struct Sand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        subcommands: [Run.self, Doctor.self],
-        defaultSubcommand: Run.self
+        subcommands: [Run.self, Doctor.self]
     )
 }
 

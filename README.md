@@ -67,7 +67,7 @@ provisioner:
 ## Usage
 
 ```
-swift run sand --config sand.yml
+swift run sand run --config sand.yml
 ```
 
 sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current `ephemeral` VM before exiting.
@@ -117,7 +117,7 @@ tart delete ephemeral
 
 ```
 swift test
-swift run sand --config ./sample_config.yml
+swift run sand run --config ./sample_config.yml
 ```
 
 ## Acknowledgements
