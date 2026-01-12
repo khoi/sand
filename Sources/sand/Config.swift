@@ -227,16 +227,31 @@ struct Config: Decodable {
         }
     }
 
-    let vm: VM
-    let provisioner: Provisioner
+    struct RunnerConfig: Decodable {
+        let name: String
+        let vm: VM
+        let provisioner: Provisioner
+        let stopAfter: Int?
+    }
+
+    let vm: VM?
+    let provisioner: Provisioner?
     let stopAfter: Int?
     let runnerCount: Int?
+    let runners: [RunnerConfig]?
 
-    init(vm: VM, provisioner: Provisioner, stopAfter: Int?, runnerCount: Int? = nil) {
+    init(
+        vm: VM?,
+        provisioner: Provisioner?,
+        stopAfter: Int?,
+        runnerCount: Int? = nil,
+        runners: [RunnerConfig]? = nil
+    ) {
         self.vm = vm
         self.provisioner = provisioner
         self.stopAfter = stopAfter
         self.runnerCount = runnerCount
+        self.runners = runners
     }
 
     static func load(path: String) throws -> Config {
@@ -248,6 +263,35 @@ struct Config: Decodable {
     }
 
     private func expanded() -> Config {
+        if let runners, !runners.isEmpty {
+            let expandedRunners = runners.map { runner in
+                RunnerConfig(
+                    name: runner.name,
+                    vm: expandVM(runner.vm),
+                    provisioner: runner.provisioner.expanded(),
+                    stopAfter: runner.stopAfter
+                )
+            }
+            return Config(
+                vm: vm,
+                provisioner: provisioner,
+                stopAfter: stopAfter,
+                runnerCount: runnerCount,
+                runners: expandedRunners
+            )
+        }
+        guard let vm, let provisioner else {
+            return self
+        }
+        return Config(
+            vm: expandVM(vm),
+            provisioner: provisioner.expanded(),
+            stopAfter: stopAfter,
+            runnerCount: runnerCount
+        )
+    }
+
+    private func expandVM(_ vm: VM) -> VM {
         let vmSource: VMSource
         switch vm.source.type {
         case .oci:
@@ -265,7 +309,7 @@ struct Config: Decodable {
                 tag: mount.tag
             )
         }
-        let expandedVM = VM(
+        return VM(
             source: vmSource,
             hardware: vm.hardware,
             mounts: mounts,
@@ -273,8 +317,6 @@ struct Config: Decodable {
             diskSizeGb: vm.diskSizeGb,
             ssh: vm.ssh
         )
-        let expandedProvisioner = provisioner.expanded()
-        return Config(vm: expandedVM, provisioner: expandedProvisioner, stopAfter: stopAfter, runnerCount: runnerCount)
     }
 
     static func expandPath(_ path: String) -> String {

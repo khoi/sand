@@ -1,17 +1,35 @@
-stopAfter: 2
-runnerCount: 2
-vm:
-  source:
-    type: oci
-    image: "ghcr.io/cirruslabs/ubuntu:latest"
-  hardware:
-    ramGb: 4
-  ssh:
-    user: admin
-    password: admin
-    port: 22
-provisioner:
-  type: script
-  config:
-    run: |
-      echo "Hello World"
+runners:
+  - name: runner-1
+    stopAfter: 1
+    vm:
+      source:
+        type: oci
+        image: "ghcr.io/cirruslabs/ubuntu:latest"
+      hardware:
+        ramGb: 4
+      ssh:
+        user: admin
+        password: admin
+        port: 22
+    provisioner:
+      type: script
+      config:
+        run: |
+          echo "Hello World from runner 1"
+  - name: runner-2
+    stopAfter: 1
+    vm:
+      source:
+        type: oci
+        image: "ghcr.io/cirruslabs/ubuntu:latest"
+      hardware:
+        ramGb: 4
+      ssh:
+        user: admin
+        password: admin
+        port: 22
+    provisioner:
+      type: script
+      config:
+        run: |
+          echo "Hello World from runner 2"

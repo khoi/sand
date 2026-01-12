@@ -67,3 +67,23 @@ func invalidConfigReportsIssues() {
     #expect(issues.contains(.init(severity: .error, message: "vm.mounts.guestFolder must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "provisioner.config.run must not be empty for script provisioner.")))
 }
+
+@Test
+func duplicateRunnerNamesAreRejected() {
+    let vm = Config.VM(
+        source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+        hardware: nil,
+        mounts: [],
+        run: .default,
+        diskSizeGb: nil,
+        ssh: .standard
+    )
+    let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
+    let runners = [
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil),
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil)
+    ]
+    let config = Config(vm: nil, provisioner: nil, stopAfter: nil, runnerCount: nil, runners: runners)
+    let issues = ConfigValidator().validate(config)
+    #expect(issues.contains(.init(severity: .error, message: "runner name must be unique: same.")))
+}

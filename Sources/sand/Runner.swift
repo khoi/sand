@@ -14,6 +14,7 @@ struct Runner: @unchecked Sendable {
     enum RunnerError: Error {
         case missingGitHub
         case missingScript
+        case missingConfig
     }
 
     init(
@@ -52,7 +53,10 @@ struct Runner: @unchecked Sendable {
 
     private func runOnce() async throws {
         let name = vmName
-        let source = config.vm.source.resolvedSource
+        guard let vm = config.vm, let provisionerConfig = config.provisioner else {
+            throw RunnerError.missingConfig
+        }
+        let source = vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
         logger.info("clone VM \(name) from \(source)")
@@ -61,9 +65,9 @@ struct Runner: @unchecked Sendable {
         defer {
             shutdownCoordinator.cleanup(tart: tart)
         }
-        try applyVMConfigIfNeeded(name: name)
+        try applyVMConfigIfNeeded(name: name, vm: vm)
         let runOptions = Tart.RunOptions(
-            directoryMounts: config.vm.mounts.map {
+            directoryMounts: vm.mounts.map {
                 Tart.DirectoryMount(
                     hostPath: $0.hostPath,
                     guestFolder: $0.guestFolder,
@@ -71,20 +75,20 @@ struct Runner: @unchecked Sendable {
                     tag: $0.tag
                 )
             },
-            noAudio: config.vm.hardware?.audio == false,
-            noGraphics: config.vm.run.noGraphics,
-            noClipboard: config.vm.run.noClipboard
+            noAudio: vm.hardware?.audio == false,
+            noGraphics: vm.run.noGraphics,
+            noClipboard: vm.run.noClipboard
         )
         logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
         logger.info("wait for VM IP")
         let ip = try tart.ip(name: name, wait: 60)
         logger.info("VM IP \(ip)")
-        let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: config.vm.ssh)
+        let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         try await waitForSSH(ssh: ssh)
-        switch config.provisioner.type {
+        switch provisionerConfig.type {
         case .script:
-            guard let run = config.provisioner.script?.run else {
+            guard let run = provisionerConfig.script?.run else {
                 throw RunnerError.missingScript
             }
             logger.info("run script provisioner")
@@ -96,7 +100,7 @@ struct Runner: @unchecked Sendable {
             }
             logger.info("script provisioner finished")
         case .github:
-            guard let github, let githubConfig = config.provisioner.github else {
+            guard let github, let githubConfig = provisionerConfig.github else {
                 throw RunnerError.missingGitHub
             }
             logger.info("run github provisioner")
@@ -114,15 +118,15 @@ struct Runner: @unchecked Sendable {
         }
     }
 
-    private func applyVMConfigIfNeeded(name: String) throws {
-        let hardware = config.vm.hardware
+    private func applyVMConfigIfNeeded(name: String, vm: Config.VM) throws {
+        let hardware = vm.hardware
         let display: Tart.Display? = hardware?.display.map {
             Tart.Display(width: $0.width, height: $0.height, unit: $0.unit?.rawValue)
         }
         let displayRefit = hardware?.display?.refit
         let memoryMb = hardware?.ramGb.map { $0 * 1024 }
         let cpuCores = hardware?.cpuCores
-        let diskSizeGb = config.vm.diskSizeGb
+        let diskSizeGb = vm.diskSizeGb
         guard cpuCores != nil || memoryMb != nil || display != nil || displayRefit != nil || diskSizeGb != nil else {
             return
         }

@@ -36,45 +36,57 @@ struct Run: AsyncParsableCommand {
         for warning in issues where warning.severity == .warning {
             logger.warning("\(warning.message)")
         }
-        let runnerCount = config.runnerCount ?? 1
         let processRunner = SystemProcessRunner()
-        let github: GitHubService?
-        switch config.provisioner.type {
-        case .github:
-            guard let githubConfig = config.provisioner.github else {
-                github = nil
-                break
-            }
-            let auth = try GitHubAuth(appId: githubConfig.appId, privateKeyPath: githubConfig.privateKeyPath)
-            github = GitHubService(
-                auth: auth,
-                session: URLSession.shared,
-                organization: githubConfig.organization,
-                repository: githubConfig.repository
-            )
-        case .script:
-            github = nil
-        }
         let provisioner = GitHubProvisioner()
         var runners: [Runner] = []
         var cleanupTargets: [(VMShutdownCoordinator, Tart)] = []
-        for index in 1...runnerCount {
-            let tart = Tart(processRunner: processRunner)
-            let shutdownLogger = Logger(label: "sand.shutdown.\(index)")
-            let shutdownCoordinator = VMShutdownCoordinator(logger: shutdownLogger)
-            cleanupTargets.append((shutdownCoordinator, tart))
-            let runnerConfig = configForRunner(config, index: index, total: runnerCount)
-            let vmName = runnerCount == 1 ? "sandrunner" : "sandrunner-\(index)"
-            let runner = Runner(
-                tart: tart,
-                github: github,
-                provisioner: provisioner,
-                config: runnerConfig,
-                shutdownCoordinator: shutdownCoordinator,
-                vmName: vmName,
-                logLabel: "runner\(index)"
-            )
-            runners.append(runner)
+        if let runnerConfigs = config.runners, !runnerConfigs.isEmpty {
+            for (index, runnerConfig) in runnerConfigs.enumerated() {
+                let runnerIndex = index + 1
+                let tart = Tart(processRunner: processRunner)
+                let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)")
+                let shutdownCoordinator = VMShutdownCoordinator(logger: shutdownLogger)
+                cleanupTargets.append((shutdownCoordinator, tart))
+                let runnerName = runnerConfig.name
+                let github = try githubService(for: runnerConfig.provisioner)
+                let runnerWrapper = Config(
+                    vm: runnerConfig.vm,
+                    provisioner: runnerConfig.provisioner,
+                    stopAfter: runnerConfig.stopAfter,
+                    runnerCount: nil
+                )
+                let runner = Runner(
+                    tart: tart,
+                    github: github,
+                    provisioner: provisioner,
+                    config: runnerWrapper,
+                    shutdownCoordinator: shutdownCoordinator,
+                    vmName: runnerName,
+                    logLabel: runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
+                )
+                runners.append(runner)
+            }
+        } else {
+            let runnerCount = config.runnerCount ?? 1
+            let github = try githubService(for: config.provisioner)
+            for index in 1...runnerCount {
+                let tart = Tart(processRunner: processRunner)
+                let shutdownLogger = Logger(label: "sand.shutdown.\(index)")
+                let shutdownCoordinator = VMShutdownCoordinator(logger: shutdownLogger)
+                cleanupTargets.append((shutdownCoordinator, tart))
+                let runnerConfig = configForRunner(config, index: index, total: runnerCount)
+                let vmName = runnerCount == 1 ? "sandrunner" : "sandrunner-\(index)"
+                let runner = Runner(
+                    tart: tart,
+                    github: github,
+                    provisioner: provisioner,
+                    config: runnerConfig,
+                    shutdownCoordinator: shutdownCoordinator,
+                    vmName: vmName,
+                    logLabel: "runner\(index)"
+                )
+                runners.append(runner)
+            }
         }
         let shutdownLogger = Logger(label: "sand.shutdown")
         let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
@@ -99,11 +111,11 @@ struct Run: AsyncParsableCommand {
         guard total > 1 else {
             return config
         }
-        switch config.provisioner.type {
+        switch config.provisioner?.type {
         case .script:
             return config
         case .github:
-            guard let github = config.provisioner.github else {
+            guard let github = config.provisioner?.github else {
                 return config
             }
             let runnerName = "\(github.runnerName)-\(index)"
@@ -122,6 +134,21 @@ struct Run: AsyncParsableCommand {
                 stopAfter: config.stopAfter,
                 runnerCount: config.runnerCount
             )
+        default:
+            return config
         }
+    }
+
+    private func githubService(for provisioner: Config.Provisioner?) throws -> GitHubService? {
+        guard let provisioner, provisioner.type == .github, let githubConfig = provisioner.github else {
+            return nil
+        }
+        let auth = try GitHubAuth(appId: githubConfig.appId, privateKeyPath: githubConfig.privateKeyPath)
+        return GitHubService(
+            auth: auth,
+            session: URLSession.shared,
+            organization: githubConfig.organization,
+            repository: githubConfig.repository
+        )
     }
 }

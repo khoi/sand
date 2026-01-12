@@ -12,8 +12,11 @@ struct ConfigValidationIssue: Equatable {
 
 final class ConfigValidator {
     func validate(_ config: Config) -> [ConfigValidationIssue] {
-        var issues: [ConfigValidationIssue] = []
+        if let runners = config.runners, !runners.isEmpty {
+            return validateRunners(runners)
+        }
 
+        var issues: [ConfigValidationIssue] = []
         if let stopAfter = config.stopAfter, stopAfter <= 0 {
             issues.append(.init(
                 severity: .warning,
@@ -26,9 +29,50 @@ final class ConfigValidator {
                 message: "runnerCount must be greater than 0."
             ))
         }
+        guard let vm = config.vm, let provisioner = config.provisioner else {
+            issues.append(.init(
+                severity: .error,
+                message: "Config must define either runners or vm/provisioner."
+            ))
+            return issues
+        }
 
-        validateVM(config.vm, issues: &issues)
-        validateProvisioner(config.provisioner, issues: &issues)
+        validateVM(vm, issues: &issues)
+        validateProvisioner(provisioner, issues: &issues)
+
+        return issues
+    }
+
+    private func validateRunners(_ runners: [Config.RunnerConfig]) -> [ConfigValidationIssue] {
+        var issues: [ConfigValidationIssue] = []
+        var seenNames = Set<String>()
+
+        for runner in runners {
+            let trimmedName = runner.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = trimmedName.isEmpty ? "runner <unnamed>" : "runner \(trimmedName)"
+            if trimmedName.isEmpty {
+                issues.append(.init(severity: .error, message: "runner name must not be empty."))
+            } else if seenNames.contains(trimmedName) {
+                issues.append(.init(severity: .error, message: "runner name must be unique: \(trimmedName)."))
+            } else {
+                seenNames.insert(trimmedName)
+            }
+            if let stopAfter = runner.stopAfter, stopAfter <= 0 {
+                issues.append(.init(
+                    severity: .warning,
+                    message: "\(label): stopAfter is \(stopAfter); sand will exit immediately."
+                ))
+            }
+            var runnerIssues: [ConfigValidationIssue] = []
+            validateVM(runner.vm, issues: &runnerIssues)
+            validateProvisioner(runner.provisioner, issues: &runnerIssues)
+            issues.append(contentsOf: runnerIssues.map {
+                ConfigValidationIssue(
+                    severity: $0.severity,
+                    message: "\(label): \($0.message)"
+                )
+            })
+        }
 
         return issues
     }
