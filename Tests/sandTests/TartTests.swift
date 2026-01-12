@@ -43,4 +43,35 @@ final class TartTests: XCTestCase {
         XCTAssertEqual(ip, "10.0.0.1")
         XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["ip", "ephemeral", "--wait", "60"], wait: true))
     }
+
+    func testPrepareSkipsPullWhenPresent() throws {
+        let runner = MockProcessRunner()
+        runner.results = [ProcessResult(stdout: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest\n", stderr: "", exitCode: 0)]
+        let tart = Tart(processRunner: runner)
+        try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
+        XCTAssertEqual(runner.calls, [
+            .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true)
+        ])
+    }
+
+    func testPreparePullsWhenMissing() throws {
+        let runner = MockProcessRunner()
+        runner.results = [
+            ProcessResult(stdout: "", stderr: "", exitCode: 0),
+            ProcessResult(stdout: "", stderr: "", exitCode: 0)
+        ]
+        let tart = Tart(processRunner: runner)
+        try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
+        XCTAssertEqual(runner.calls, [
+            .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true),
+            .init(executable: "tart", arguments: ["pull", "ghcr.io/cirruslabs/macos-tahoe-xcode:latest"], wait: true)
+        ])
+    }
+
+    func testExecArgs() throws {
+        let runner = MockProcessRunner()
+        let tart = Tart(processRunner: runner)
+        try tart.exec(name: "ephemeral", command: "echo 1")
+        XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["exec", "ephemeral", "/bin/bash", "-lc", "echo 1"], wait: true))
+    }
 }

@@ -1,6 +1,8 @@
 import ArgumentParser
 import Foundation
 
+@main
+@available(macOS 14.0, *)
 struct Sand: AsyncParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = "sand.yml"
@@ -27,5 +29,3 @@ struct Sand: AsyncParsableCommand {
         try await runner.run()
     }
 }
-
-Sand.main()

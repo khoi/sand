@@ -30,21 +30,20 @@ struct Runner {
             try? tart.stop(name: name)
         }
         let ip = try tart.ip(name: name, wait: 60)
-        let script: String
         switch config.provisioner.type {
         case .script:
             guard let run = config.provisioner.script?.run else {
                 throw RunnerError.missingScript
             }
-            script = run
+            try tart.exec(name: name, command: run)
         case .github:
             guard let github, let githubConfig = config.provisioner.github else {
                 throw RunnerError.missingGitHub
             }
             let token = try await github.runnerRegistrationToken()
             let downloadURL = try await github.runnerDownloadURL()
-            script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
+            let script = provisioner.script(config: githubConfig, runnerToken: token, downloadURL: downloadURL)
+            try await ssh.execute(host: ip, username: config.ssh.username, password: config.ssh.password, command: script)
         }
-        try await ssh.execute(host: ip, username: config.ssh.username, password: config.ssh.password, command: script)
     }
 }

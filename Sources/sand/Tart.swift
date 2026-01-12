@@ -13,6 +13,9 @@ struct Tart {
 
     func prepare(source: String) throws {
         if isOCISource(source) {
+            if try hasOCI(source: source) {
+                return
+            }
             try pull(source: source)
         }
     }
@@ -46,10 +49,32 @@ struct Tart {
         _ = try processRunner.run(executable: "tart", arguments: ["delete", name], wait: true)
     }
 
+    func exec(name: String, command: String) throws {
+        _ = try processRunner.run(executable: "tart", arguments: ["exec", name, "/bin/bash", "-lc", command], wait: true)
+    }
+
     private func isOCISource(_ source: String) -> Bool {
         if source.hasPrefix("file://") {
             return false
         }
         return true
+    }
+
+    private func hasOCI(source: String) throws -> Bool {
+        let result = try processRunner.run(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true)
+        let output = result?.stdout ?? ""
+        let expected = normalizeOCI(source)
+        return output
+            .split(separator: "\n")
+            .map { normalizeOCI(String($0)) }
+            .contains(expected)
+    }
+
+    private func normalizeOCI(_ source: String) -> String {
+        let prefix = "oci://"
+        if source.hasPrefix(prefix) {
+            return String(source.dropFirst(prefix.count))
+        }
+        return source
     }
 }
