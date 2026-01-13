@@ -40,6 +40,10 @@ func parsesConfigAndExpandsPaths() throws {
         privateKeyPath: ~/key.pem
         runnerName: runner-1
         extraLabels: [fast, arm64]
+    healthCheck:
+      command: "pgrep -f run.sh"
+      interval: 15
+      delay: 45
     """
     let url = try writeTempFile(contents: yaml)
     let config = try Config.load(path: url.path)
@@ -65,6 +69,9 @@ func parsesConfigAndExpandsPaths() throws {
     #expect(config.provisioner?.github?.repository == "repo")
     #expect(config.provisioner?.github?.extraLabels ?? [] == ["fast", "arm64"])
     #expect(config.provisioner?.github?.privateKeyPath.hasPrefix(home) ?? false)
+    #expect(config.healthCheck?.command == "pgrep -f run.sh")
+    #expect(config.healthCheck?.interval == 15)
+    #expect(config.healthCheck?.delay == 45)
 }
 
 @Test
@@ -84,6 +91,8 @@ func scriptProvisioner() throws {
         run: |
           echo "Hello World"
           sleep 1
+    healthCheck:
+      command: "true"
     """
     let url = try writeTempFile(contents: yaml)
     let config = try Config.load(path: url.path)
@@ -98,6 +107,8 @@ func scriptProvisioner() throws {
     #expect(config.vm?.ssh.port == 2222)
     #expect(config.provisioner?.type == .script)
     #expect(config.provisioner?.script?.run.contains("Hello World") == true)
+    #expect(config.healthCheck?.interval == 30)
+    #expect(config.healthCheck?.delay == 60)
 }
 
 @Test
@@ -117,6 +128,8 @@ func explicitRunnersConfig() throws {
           type: script
           config:
             run: echo "A"
+        healthCheck:
+          command: "true"
       - name: runner-b
         stopAfter: 2
         vm:
@@ -140,4 +153,5 @@ func explicitRunnersConfig() throws {
     #expect(config.runners?.first?.vm.source.resolvedSource == "file://\(home)/vm-a")
     #expect(config.runners?.last?.stopAfter == 2)
     #expect(config.runners?.last?.vm.source.resolvedSource == "file://\(home)/vm-b")
+    #expect(config.runners?.first?.healthCheck?.command == "true")
 }

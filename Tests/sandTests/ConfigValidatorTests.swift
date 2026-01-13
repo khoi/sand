@@ -50,7 +50,8 @@ func invalidConfigReportsIssues() {
         vm: vm,
         provisioner: Config.Provisioner(type: .script, script: .init(run: "  "), github: nil),
         stopAfter: 0,
-        runnerCount: 0
+        runnerCount: 0,
+        healthCheck: Config.HealthCheck(command: "  ", interval: 0, delay: -1)
     )
     let issues = ConfigValidator().validate(config)
     #expect(issues.contains(.init(severity: .warning, message: "stopAfter is 0; sand will exit immediately.")))
@@ -66,6 +67,9 @@ func invalidConfigReportsIssues() {
     #expect(issues.contains(.init(severity: .warning, message: "Mount hostPath does not exist: /missing-mount.")))
     #expect(issues.contains(.init(severity: .error, message: "vm.mounts.guestFolder must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "provisioner.config.run must not be empty for script provisioner.")))
+    #expect(issues.contains(.init(severity: .error, message: "healthCheck.command must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "healthCheck.interval must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "healthCheck.delay must be greater than or equal to 0.")))
 }
 
 @Test
@@ -80,8 +84,8 @@ func duplicateRunnerNamesAreRejected() {
     )
     let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
     let runners = [
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil),
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil)
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil),
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil)
     ]
     let config = Config(vm: nil, provisioner: nil, stopAfter: nil, runnerCount: nil, runners: runners)
     let issues = ConfigValidator().validate(config)

@@ -39,6 +39,9 @@ final class ConfigValidator {
 
         validateVM(vm, issues: &issues)
         validateProvisioner(provisioner, issues: &issues)
+        if let healthCheck = config.healthCheck {
+            validateHealthCheck(healthCheck, issues: &issues)
+        }
 
         return issues
     }
@@ -66,6 +69,9 @@ final class ConfigValidator {
             var runnerIssues: [ConfigValidationIssue] = []
             validateVM(runner.vm, issues: &runnerIssues)
             validateProvisioner(runner.provisioner, issues: &runnerIssues)
+            if let healthCheck = runner.healthCheck {
+                validateHealthCheck(healthCheck, issues: &runnerIssues)
+            }
             issues.append(contentsOf: runnerIssues.map {
                 ConfigValidationIssue(
                     severity: $0.severity,
@@ -126,6 +132,18 @@ final class ConfigValidator {
             if mount.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 issues.append(.init(severity: .error, message: "vm.mounts.guestFolder must not be empty."))
             }
+        }
+    }
+
+    private func validateHealthCheck(_ healthCheck: Config.HealthCheck, issues: inout [ConfigValidationIssue]) {
+        if healthCheck.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(.init(severity: .error, message: "healthCheck.command must not be empty."))
+        }
+        if healthCheck.interval <= 0 {
+            issues.append(.init(severity: .error, message: "healthCheck.interval must be greater than 0."))
+        }
+        if healthCheck.delay < 0 {
+            issues.append(.init(severity: .error, message: "healthCheck.delay must be greater than or equal to 0."))
         }
     }
 

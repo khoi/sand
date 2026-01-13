@@ -53,7 +53,8 @@ struct Run: AsyncParsableCommand {
                     vm: runnerConfig.vm,
                     provisioner: runnerConfig.provisioner,
                     stopAfter: runnerConfig.stopAfter,
-                    runnerCount: nil
+                    runnerCount: nil,
+                    healthCheck: runnerConfig.healthCheck
                 )
                 let runner = Runner(
                     tart: tart,
@@ -132,7 +133,8 @@ struct Run: AsyncParsableCommand {
                 vm: config.vm,
                 provisioner: updatedProvisioner,
                 stopAfter: config.stopAfter,
-                runnerCount: config.runnerCount
+                runnerCount: config.runnerCount,
+                healthCheck: config.healthCheck
             )
         default:
             return config

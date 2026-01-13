@@ -186,6 +186,38 @@ struct Config: Decodable {
         }
     }
 
+    struct HealthCheck: Decodable {
+        private static let defaultInterval: TimeInterval = 30
+        private static let defaultDelay: TimeInterval = 60
+
+        let command: String
+        let interval: TimeInterval
+        let delay: TimeInterval
+
+        init(
+            command: String,
+            interval: TimeInterval = Self.defaultInterval,
+            delay: TimeInterval = Self.defaultDelay
+        ) {
+            self.command = command
+            self.interval = interval
+            self.delay = delay
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.command = try container.decode(String.self, forKey: .command)
+            self.interval = try container.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? Self.defaultInterval
+            self.delay = try container.decodeIfPresent(TimeInterval.self, forKey: .delay) ?? Self.defaultDelay
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case command
+            case interval
+            case delay
+        }
+    }
+
     struct Provisioner: Decodable {
         enum ProvisionerType: String, Decodable {
             case script
@@ -232,6 +264,7 @@ struct Config: Decodable {
         let vm: VM
         let provisioner: Provisioner
         let stopAfter: Int?
+        let healthCheck: HealthCheck?
     }
 
     let vm: VM?
@@ -239,19 +272,22 @@ struct Config: Decodable {
     let stopAfter: Int?
     let runnerCount: Int?
     let runners: [RunnerConfig]?
+    let healthCheck: HealthCheck?
 
     init(
         vm: VM?,
         provisioner: Provisioner?,
         stopAfter: Int?,
         runnerCount: Int? = nil,
-        runners: [RunnerConfig]? = nil
+        runners: [RunnerConfig]? = nil,
+        healthCheck: HealthCheck? = nil
     ) {
         self.vm = vm
         self.provisioner = provisioner
         self.stopAfter = stopAfter
         self.runnerCount = runnerCount
         self.runners = runners
+        self.healthCheck = healthCheck
     }
 
     static func load(path: String) throws -> Config {
@@ -269,7 +305,8 @@ struct Config: Decodable {
                     name: runner.name,
                     vm: expandVM(runner.vm),
                     provisioner: runner.provisioner.expanded(),
-                    stopAfter: runner.stopAfter
+                    stopAfter: runner.stopAfter,
+                    healthCheck: runner.healthCheck
                 )
             }
             return Config(
@@ -277,7 +314,8 @@ struct Config: Decodable {
                 provisioner: provisioner,
                 stopAfter: stopAfter,
                 runnerCount: runnerCount,
-                runners: expandedRunners
+                runners: expandedRunners,
+                healthCheck: healthCheck
             )
         }
         guard let vm, let provisioner else {
@@ -287,7 +325,8 @@ struct Config: Decodable {
             vm: expandVM(vm),
             provisioner: provisioner.expanded(),
             stopAfter: stopAfter,
-            runnerCount: runnerCount
+            runnerCount: runnerCount,
+            healthCheck: healthCheck
         )
     }
 
