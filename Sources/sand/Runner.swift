@@ -266,7 +266,7 @@ struct Runner: @unchecked Sendable {
     }
 }
 
-private final class HealthCheckState {
+private final class HealthCheckState: @unchecked Sendable {
     private let lock = NSLock()
     private var failureMessageStorage: String?
 
