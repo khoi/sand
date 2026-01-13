@@ -10,7 +10,7 @@ Self-hosted macOS CI Runners powered by Tart - Apple's Virtualization framework.
 ## Install
 
 ```
-brew tap khoi/tap
+brew tap khoi/sand
 brew install sand
 ```
 
