@@ -234,23 +234,9 @@ struct Config: Decodable {
         let stopAfter: Int?
     }
 
-    let vm: VM?
-    let provisioner: Provisioner?
-    let stopAfter: Int?
-    let runnerCount: Int?
-    let runners: [RunnerConfig]?
+    let runners: [RunnerConfig]
 
-    init(
-        vm: VM?,
-        provisioner: Provisioner?,
-        stopAfter: Int?,
-        runnerCount: Int? = nil,
-        runners: [RunnerConfig]? = nil
-    ) {
-        self.vm = vm
-        self.provisioner = provisioner
-        self.stopAfter = stopAfter
-        self.runnerCount = runnerCount
+    init(runners: [RunnerConfig]) {
         self.runners = runners
     }
 
@@ -263,32 +249,15 @@ struct Config: Decodable {
     }
 
     private func expanded() -> Config {
-        if let runners, !runners.isEmpty {
-            let expandedRunners = runners.map { runner in
-                RunnerConfig(
-                    name: runner.name,
-                    vm: expandVM(runner.vm),
-                    provisioner: runner.provisioner.expanded(),
-                    stopAfter: runner.stopAfter
-                )
-            }
-            return Config(
-                vm: vm,
-                provisioner: provisioner,
-                stopAfter: stopAfter,
-                runnerCount: runnerCount,
-                runners: expandedRunners
+        let expandedRunners = runners.map { runner in
+            RunnerConfig(
+                name: runner.name,
+                vm: expandVM(runner.vm),
+                provisioner: runner.provisioner.expanded(),
+                stopAfter: runner.stopAfter
             )
         }
-        guard let vm, let provisioner else {
-            return self
-        }
-        return Config(
-            vm: expandVM(vm),
-            provisioner: provisioner.expanded(),
-            stopAfter: stopAfter,
-            runnerCount: runnerCount
-        )
+        return Config(runners: expandedRunners)
     }
 
     private func expandVM(_ vm: VM) -> VM {

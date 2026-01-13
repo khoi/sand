@@ -5,7 +5,7 @@ struct Runner: @unchecked Sendable {
     let tart: Tart
     let github: GitHubService?
     let provisioner: GitHubProvisioner
-    let config: Config
+    let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
     let vmName: String
     private let logger: Logger
@@ -14,14 +14,13 @@ struct Runner: @unchecked Sendable {
     enum RunnerError: Error {
         case missingGitHub
         case missingScript
-        case missingConfig
     }
 
     init(
         tart: Tart,
         github: GitHubService?,
         provisioner: GitHubProvisioner,
-        config: Config,
+        config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
         vmName: String,
         logLabel: String
@@ -53,9 +52,8 @@ struct Runner: @unchecked Sendable {
 
     private func runOnce() async throws {
         let name = vmName
-        guard let vm = config.vm, let provisionerConfig = config.provisioner else {
-            throw RunnerError.missingConfig
-        }
+        let vm = config.vm
+        let provisionerConfig = config.provisioner
         let source = vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
