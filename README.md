@@ -10,7 +10,7 @@ sand is a Swift CLI that runs ephemeral macOS VMs via Tart and executes a provis
 
 ## Configuration
 
-Create a `sand.yml` and run the CLI with `--config`. If `stopAfter` is omitted, sand loops forever. Use `runners` to define multiple VMs explicitly.
+Create a `sand.yml` and run the CLI with `--config`. If `stopAfter` is omitted, sand loops forever. `runners` is required.
 
 ```
 runners:
@@ -106,10 +106,23 @@ Configuration options:
 Example:
 
 ```
-healthCheck:
-  command: "pgrep -fl /Users/admin/actions-runner/run.sh"
-  interval: 30
-  delay: 60
+runners:
+  - name: runner-1
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/cirruslabs/macos-runner:tahoe
+    provisioner:
+      type: github
+      config:
+        appId: 123456
+        organization: my-org
+        privateKeyPath: ~/my-app.private-key.pem
+        runnerName: runner-1
+    healthCheck:
+      command: "pgrep -fl /Users/admin/actions-runner/run.sh"
+      interval: 30
+      delay: 60
 ```
 
 ## Usage
@@ -118,7 +131,7 @@ healthCheck:
 swift run sand run --config sand.yml
 ```
 
-sand runs forever by default. Set `stopAfter` to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current runner VM by name before exiting.
+sand runs forever by default. Set `stopAfter` per runner to stop after N iterations, or stop it early with Ctrl+C. On Ctrl+C (SIGINT) or SIGTERM, sand attempts to stop and delete the current runner VM by name before exiting.
 
 When multiple runners are configured, sand starts them concurrently. Runner names must be unique.
 

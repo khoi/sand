@@ -267,27 +267,10 @@ struct Config: Decodable {
         let healthCheck: HealthCheck?
     }
 
-    let vm: VM?
-    let provisioner: Provisioner?
-    let stopAfter: Int?
-    let runnerCount: Int?
-    let runners: [RunnerConfig]?
-    let healthCheck: HealthCheck?
+    let runners: [RunnerConfig]
 
-    init(
-        vm: VM?,
-        provisioner: Provisioner?,
-        stopAfter: Int?,
-        runnerCount: Int? = nil,
-        runners: [RunnerConfig]? = nil,
-        healthCheck: HealthCheck? = nil
-    ) {
-        self.vm = vm
-        self.provisioner = provisioner
-        self.stopAfter = stopAfter
-        self.runnerCount = runnerCount
+    init(runners: [RunnerConfig]) {
         self.runners = runners
-        self.healthCheck = healthCheck
     }
 
     static func load(path: String) throws -> Config {
@@ -299,35 +282,16 @@ struct Config: Decodable {
     }
 
     private func expanded() -> Config {
-        if let runners, !runners.isEmpty {
-            let expandedRunners = runners.map { runner in
-                RunnerConfig(
-                    name: runner.name,
-                    vm: expandVM(runner.vm),
-                    provisioner: runner.provisioner.expanded(),
-                    stopAfter: runner.stopAfter,
-                    healthCheck: runner.healthCheck
-                )
-            }
-            return Config(
-                vm: vm,
-                provisioner: provisioner,
-                stopAfter: stopAfter,
-                runnerCount: runnerCount,
-                runners: expandedRunners,
-                healthCheck: healthCheck
+        let expandedRunners = runners.map { runner in
+            RunnerConfig(
+                name: runner.name,
+                vm: expandVM(runner.vm),
+                provisioner: runner.provisioner.expanded(),
+                stopAfter: runner.stopAfter,
+                healthCheck: runner.healthCheck
             )
         }
-        guard let vm, let provisioner else {
-            return self
-        }
-        return Config(
-            vm: expandVM(vm),
-            provisioner: provisioner.expanded(),
-            stopAfter: stopAfter,
-            runnerCount: runnerCount,
-            healthCheck: healthCheck
-        )
+        return Config(runners: expandedRunners)
     }
 
     private func expandVM(_ vm: VM) -> VM {

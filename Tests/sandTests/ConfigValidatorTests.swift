@@ -21,12 +21,14 @@ func validConfigHasNoIssues() throws {
         runnerName: "runner-1",
         extraLabels: nil
     )
-    let config = Config(
+    let runner = Config.RunnerConfig(
+        name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .github, script: nil, github: github),
         stopAfter: 1,
-        runnerCount: 2
+        healthCheck: Config.HealthCheck(command: "true")
     )
+    let config = Config(runners: [runner])
     let issues = ConfigValidator().validate(config)
     #expect(issues.isEmpty)
 }
@@ -46,30 +48,30 @@ func invalidConfigReportsIssues() {
         diskSizeGb: 0,
         ssh: Config.SSH(user: "", password: "", port: 70_000)
     )
-    let config = Config(
+    let runner = Config.RunnerConfig(
+        name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .script, script: .init(run: "  "), github: nil),
         stopAfter: 0,
-        runnerCount: 0,
         healthCheck: Config.HealthCheck(command: "  ", interval: 0, delay: -1)
     )
+    let config = Config(runners: [runner])
     let issues = ConfigValidator().validate(config)
-    #expect(issues.contains(.init(severity: .warning, message: "stopAfter is 0; sand will exit immediately.")))
-    #expect(issues.contains(.init(severity: .error, message: "runnerCount must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "Local VM path does not exist: /missing-vm.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.hardware.ramGb must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.hardware.cpuCores must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.hardware.display width/height must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.diskSizeGb must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.ssh.user must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.ssh.password must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.ssh.port must be between 1 and 65535.")))
-    #expect(issues.contains(.init(severity: .warning, message: "Mount hostPath does not exist: /missing-mount.")))
-    #expect(issues.contains(.init(severity: .error, message: "vm.mounts.guestFolder must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "provisioner.config.run must not be empty for script provisioner.")))
-    #expect(issues.contains(.init(severity: .error, message: "healthCheck.command must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "healthCheck.interval must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "healthCheck.delay must be greater than or equal to 0.")))
+    #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: stopAfter is 0; sand will exit immediately.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: Local VM path does not exist: /missing-vm.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.ramGb must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.cpuCores must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.display width/height must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.diskSizeGb must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.user must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.password must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.port must be between 1 and 65535.")))
+    #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.command must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.interval must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.delay must be greater than or equal to 0.")))
 }
 
 @Test
@@ -87,7 +89,7 @@ func duplicateRunnerNamesAreRejected() {
         Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil),
         Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil)
     ]
-    let config = Config(vm: nil, provisioner: nil, stopAfter: nil, runnerCount: nil, runners: runners)
+    let config = Config(runners: runners)
     let issues = ConfigValidator().validate(config)
     #expect(issues.contains(.init(severity: .error, message: "runner name must be unique: same.")))
 }

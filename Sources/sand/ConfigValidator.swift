@@ -12,37 +12,12 @@ struct ConfigValidationIssue: Equatable {
 
 final class ConfigValidator {
     func validate(_ config: Config) -> [ConfigValidationIssue] {
-        if let runners = config.runners, !runners.isEmpty {
-            return validateRunners(runners)
-        }
-
         var issues: [ConfigValidationIssue] = []
-        if let stopAfter = config.stopAfter, stopAfter <= 0 {
-            issues.append(.init(
-                severity: .warning,
-                message: "stopAfter is \(stopAfter); sand will exit immediately."
-            ))
-        }
-        if let runnerCount = config.runnerCount, runnerCount <= 0 {
-            issues.append(.init(
-                severity: .error,
-                message: "runnerCount must be greater than 0."
-            ))
-        }
-        guard let vm = config.vm, let provisioner = config.provisioner else {
-            issues.append(.init(
-                severity: .error,
-                message: "Config must define either runners or vm/provisioner."
-            ))
+        if config.runners.isEmpty {
+            issues.append(.init(severity: .error, message: "runners must not be empty."))
             return issues
         }
-
-        validateVM(vm, issues: &issues)
-        validateProvisioner(provisioner, issues: &issues)
-        if let healthCheck = config.healthCheck {
-            validateHealthCheck(healthCheck, issues: &issues)
-        }
-
+        issues.append(contentsOf: validateRunners(config.runners))
         return issues
     }
 
