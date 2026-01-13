@@ -16,7 +16,8 @@ class Sand < Formula
       inreplace "Package.resolved", ssh_url, https_url
     end
 
-    system "swift", "build", "--disable-sandbox", "-c", "release"
+    swift = ENV["HOMEBREW_SWIFT"] || "swift"
+    system swift, "build", "--disable-sandbox", "-c", "release"
     bin.install ".build/release/sand"
   end
 
