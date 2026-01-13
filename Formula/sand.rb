@@ -4,6 +4,8 @@ class Sand < Formula
   head "https://github.com/khoi/sand.git", branch: "main"
 
   depends_on :macos
+  depends_on "sshpass"
+  depends_on "cirruslabs/cli/tart"
 
   def install
     # Avoid requiring SSH credentials during SwiftPM dependency fetches.
@@ -27,7 +29,7 @@ class Sand < Formula
 
   def caveats
     <<~EOS
-      sand requires macOS 14+ and Tart available in your PATH.
+      sand requires macOS 15+ and Tart available in your PATH.
     EOS
   end
 end
