@@ -71,8 +71,6 @@ runners:
       command: "true"
 ```
 
-Optional: set `vm.ssh.connectMaxRetries` to cap how many 1s SSH connection attempts sand will make while waiting for the VM to boot (omit for unlimited retries).
-
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml)
 
 ## Acknowledgements
