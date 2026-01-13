@@ -13,3 +13,14 @@ jobs:
         with:
           swift-version: "6.2"
       - run: swift test
+  brew:
+    runs-on: macos-14
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+      - run: brew install --HEAD ./Formula/sand.rb
+      - run: brew test sand
