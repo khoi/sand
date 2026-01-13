@@ -1,14 +1,13 @@
 import Foundation
-import Logging
 
 final class VMShutdownCoordinator {
     private let lock = NSLock()
     private var activeName: String?
     private var cleanupStarted = false
-    private let logger: Logger
+    private let destroyer: VMDestroyer
 
-    init(logger: Logger) {
-        self.logger = logger
+    init(destroyer: VMDestroyer) {
+        self.destroyer = destroyer
     }
 
     func activate(name: String) {
@@ -18,7 +17,7 @@ final class VMShutdownCoordinator {
         lock.unlock()
     }
 
-    func cleanup(tart: Tart) {
+    func cleanup() {
         lock.lock()
         guard !cleanupStarted, let name = activeName else {
             lock.unlock()
@@ -26,11 +25,7 @@ final class VMShutdownCoordinator {
         }
         cleanupStarted = true
         lock.unlock()
-
-        logger.info("stop VM \(name)")
-        try? tart.stop(name: name)
-        logger.info("delete VM \(name)")
-        try? tart.delete(name: name)
+        try? destroyer.destroy(name: name)
 
         lock.lock()
         activeName = nil
