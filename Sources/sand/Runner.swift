@@ -179,7 +179,11 @@ struct Runner: @unchecked Sendable {
                 } else {
                     logger.info("SSH not ready, retrying in 1s (attempt \(attempt))")
                 }
-                try await Task.sleep(nanoseconds: 1_000_000_000)
+                do {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                } catch {
+                    return false
+                }
             }
         }
     }
