@@ -34,6 +34,7 @@ struct Doctor: ParsableCommand {
         } else {
             issues.append(contentsOf: checkTartHealth())
         }
+        issues.append(contentsOf: checkConfig())
         return issues
     }
 
@@ -44,6 +45,24 @@ struct Doctor: ParsableCommand {
             return []
         } catch {
             return [ConfigValidationIssue(severity: .error, message: "tart command failed to run. Verify Tart is installed and working.")]
+        }
+    }
+
+    private func checkConfig() -> [ConfigValidationIssue] {
+        let defaultPath = Config.expandPath(Config.defaultPath)
+        guard FileManager.default.fileExists(atPath: defaultPath) else {
+            return []
+        }
+        return validateConfig(at: defaultPath)
+    }
+
+    private func validateConfig(at path: String) -> [ConfigValidationIssue] {
+        do {
+            let config = try Config.load(path: path)
+            let validator = ConfigValidator()
+            return validator.validate(config)
+        } catch {
+            return [ConfigValidationIssue(severity: .error, message: "Failed to load config at \(path): \(error.localizedDescription)")]
         }
     }
 

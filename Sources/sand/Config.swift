@@ -2,6 +2,8 @@ import Foundation
 import Yams
 
 struct Config: Decodable {
+    static let defaultPath = "sand.yml"
+
     struct VM: Decodable {
         let source: VMSource
         let hardware: Hardware?
