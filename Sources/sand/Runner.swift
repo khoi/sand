@@ -62,7 +62,7 @@ struct Runner: @unchecked Sendable {
         try tart.clone(source: source, name: name)
         shutdownCoordinator.activate(name: name)
         defer {
-            shutdownCoordinator.cleanup(tart: tart)
+            shutdownCoordinator.cleanup()
         }
         try applyVMConfigIfNeeded(name: name, vm: vm)
         let runOptions = Tart.RunOptions(
@@ -206,7 +206,7 @@ struct Runner: @unchecked Sendable {
                         let message = "exit code \(exitCode)"
                         logger.warning("healthCheck failed with \(message), restarting VM")
                         state.markFailed(message: message)
-                        shutdownCoordinator.cleanup(tart: tart)
+                        shutdownCoordinator.cleanup()
                         return
                     }
                 } catch {

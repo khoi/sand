@@ -18,6 +18,7 @@ brew install sand
 
 ```
 sand run --config config.yml
+sand destroy --config config.yml
 ```
 
 ## Configuration

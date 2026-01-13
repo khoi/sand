@@ -7,7 +7,7 @@ import Logging
 @available(macOS 14.0, *)
 struct Sand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        subcommands: [Run.self, Doctor.self, Validate.self]
+        subcommands: [Run.self, Destroy.self, Doctor.self, Validate.self]
     )
 }
 
@@ -39,13 +39,14 @@ struct Run: AsyncParsableCommand {
         let processRunner = SystemProcessRunner()
         let provisioner = GitHubProvisioner()
         var runners: [Runner] = []
-        var cleanupTargets: [(VMShutdownCoordinator, Tart)] = []
+        var cleanupTargets: [VMShutdownCoordinator] = []
         for (index, runnerConfig) in config.runners.enumerated() {
             let runnerIndex = index + 1
             let tart = Tart(processRunner: processRunner)
             let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)")
-            let shutdownCoordinator = VMShutdownCoordinator(logger: shutdownLogger)
-            cleanupTargets.append((shutdownCoordinator, tart))
+            let destroyer = VMDestroyer(tart: tart, logger: shutdownLogger)
+            let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer)
+            cleanupTargets.append(shutdownCoordinator)
             let runnerName = runnerConfig.name
             let github = try githubService(for: runnerConfig.provisioner)
             let runner = Runner(
@@ -61,8 +62,8 @@ struct Run: AsyncParsableCommand {
         }
         let shutdownLogger = Logger(label: "sand.shutdown")
         let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
-            for (coordinator, tart) in cleanupTargets {
-                coordinator.cleanup(tart: tart)
+            for coordinator in cleanupTargets {
+                coordinator.cleanup()
             }
         }
         defer {
