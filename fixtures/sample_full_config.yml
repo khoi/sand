@@ -28,6 +28,7 @@ runners:
         user: admin
         password: admin
         port: 22
+        connectMaxRetries: null
     provisioner:
       type: script
       config:
@@ -48,6 +49,7 @@ runners:
         user: admin
         password: admin
         port: 22
+        connectMaxRetries: null
     provisioner:
       type: github
       config:

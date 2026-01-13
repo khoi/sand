@@ -97,6 +97,9 @@ final class ConfigValidator {
         if vm.ssh.port <= 0 || vm.ssh.port > 65_535 {
             issues.append(.init(severity: .error, message: "vm.ssh.port must be between 1 and 65535."))
         }
+        if let connectMaxRetries = vm.ssh.connectMaxRetries, connectMaxRetries <= 0 {
+            issues.append(.init(severity: .error, message: "vm.ssh.connectMaxRetries must be greater than 0."))
+        }
 
         for mount in vm.mounts {
             if mount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
