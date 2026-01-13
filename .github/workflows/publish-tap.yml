@@ -41,6 +41,8 @@ jobs:
               out.append(f'  url "{url}"')
               out.append(f'  sha256 "{sha}"')
               inserted = True
+          if not inserted:
+            raise SystemExit("homepage not found")
           text = "\n".join(out)
           if path.read_text().endswith("\n"):
             text += "\n"
