@@ -94,6 +94,37 @@ runners:
         extraLabels: [custom]
 ```
 
+### Health check
+
+Optional `healthCheck` monitors VM health during provisioner execution. It periodically runs a command via SSH; if the command exits non-zero, sand stops and deletes the VM so the next iteration can start fresh. SSH connection errors are logged and retried. When using `runners`, configure `healthCheck` under each runner.
+
+Configuration options:
+- `command`: Shell command to execute for the health check (required)
+- `interval`: Time in seconds between checks (default: 30)
+- `delay`: Initial delay in seconds before starting checks (default: 60)
+
+Example:
+
+```
+runners:
+  - name: runner-1
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/cirruslabs/macos-runner:tahoe
+    provisioner:
+      type: github
+      config:
+        appId: 123456
+        organization: my-org
+        privateKeyPath: ~/my-app.private-key.pem
+        runnerName: runner-1
+    healthCheck:
+      command: "pgrep -fl /Users/admin/actions-runner/run.sh"
+      interval: 30
+      delay: 60
+```
+
 ## Usage
 
 ```

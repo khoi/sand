@@ -14,6 +14,8 @@ runners:
       config:
         run: |
           echo "Hello World from runner 1"
+    healthCheck:
+      command: "true"
   - name: runner-2
     stopAfter: 1
     vm:
@@ -29,3 +31,5 @@ runners:
       config:
         run: |
           echo "Hello World from runner 2"
+    healthCheck:
+      command: "true"

@@ -25,7 +25,8 @@ func validConfigHasNoIssues() throws {
         name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .github, script: nil, github: github),
-        stopAfter: 1
+        stopAfter: 1,
+        healthCheck: Config.HealthCheck(command: "true")
     )
     let config = Config(runners: [runner])
     let issues = ConfigValidator().validate(config)
@@ -51,7 +52,8 @@ func invalidConfigReportsIssues() {
         name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .script, script: .init(run: "  "), github: nil),
-        stopAfter: 0
+        stopAfter: 0,
+        healthCheck: Config.HealthCheck(command: "  ", interval: 0, delay: -1)
     )
     let config = Config(runners: [runner])
     let issues = ConfigValidator().validate(config)
@@ -67,6 +69,9 @@ func invalidConfigReportsIssues() {
     #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.command must not be empty.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.interval must be greater than 0.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.delay must be greater than or equal to 0.")))
 }
 
 @Test
@@ -81,8 +86,8 @@ func duplicateRunnerNamesAreRejected() {
     )
     let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
     let runners = [
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil),
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil)
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil),
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil)
     ]
     let config = Config(runners: runners)
     let issues = ConfigValidator().validate(config)

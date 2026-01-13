@@ -186,6 +186,38 @@ struct Config: Decodable {
         }
     }
 
+    struct HealthCheck: Decodable {
+        private static let defaultInterval: TimeInterval = 30
+        private static let defaultDelay: TimeInterval = 60
+
+        let command: String
+        let interval: TimeInterval
+        let delay: TimeInterval
+
+        init(
+            command: String,
+            interval: TimeInterval = Self.defaultInterval,
+            delay: TimeInterval = Self.defaultDelay
+        ) {
+            self.command = command
+            self.interval = interval
+            self.delay = delay
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.command = try container.decode(String.self, forKey: .command)
+            self.interval = try container.decodeIfPresent(TimeInterval.self, forKey: .interval) ?? Self.defaultInterval
+            self.delay = try container.decodeIfPresent(TimeInterval.self, forKey: .delay) ?? Self.defaultDelay
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case command
+            case interval
+            case delay
+        }
+    }
+
     struct Provisioner: Decodable {
         enum ProvisionerType: String, Decodable {
             case script
@@ -232,6 +264,7 @@ struct Config: Decodable {
         let vm: VM
         let provisioner: Provisioner
         let stopAfter: Int?
+        let healthCheck: HealthCheck?
     }
 
     let runners: [RunnerConfig]
@@ -254,7 +287,8 @@ struct Config: Decodable {
                 name: runner.name,
                 vm: expandVM(runner.vm),
                 provisioner: runner.provisioner.expanded(),
-                stopAfter: runner.stopAfter
+                stopAfter: runner.stopAfter,
+                healthCheck: runner.healthCheck
             )
         }
         return Config(runners: expandedRunners)
