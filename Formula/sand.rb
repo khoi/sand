@@ -29,7 +29,7 @@ class Sand < Formula
 
   def caveats
     <<~EOS
-      sand requires macOS 14+ and Tart available in your PATH.
+      sand requires macOS 15+ and Tart available in your PATH.
     EOS
   end
 end
