@@ -29,8 +29,18 @@ struct Destroy: ParsableCommand {
         }
         let tart = Tart(processRunner: SystemProcessRunner())
         let destroyer = VMDestroyer(tart: tart, logger: logger)
+        var firstError: Error?
         for runner in config.runners {
-            destroyer.destroy(name: runner.name)
+            do {
+                try destroyer.destroy(name: runner.name)
+            } catch {
+                if firstError == nil {
+                    firstError = error
+                }
+            }
+        }
+        if let firstError {
+            throw firstError
         }
     }
 }

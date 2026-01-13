@@ -25,7 +25,7 @@ final class VMShutdownCoordinator {
         }
         cleanupStarted = true
         lock.unlock()
-        destroyer.destroy(name: name)
+        try? destroyer.destroy(name: name)
 
         lock.lock()
         activeName = nil
