@@ -84,7 +84,9 @@ struct Runner: @unchecked Sendable {
         let ip = try tart.ip(name: name, wait: 60)
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
-        try await waitForSSH(ssh: ssh)
+        guard await waitForSSH(ssh: ssh) else {
+            return
+        }
         let healthCheckState = HealthCheckState()
         let healthCheckTask = startHealthCheckIfNeeded(
             healthCheck: config.healthCheck,
@@ -159,16 +161,29 @@ struct Runner: @unchecked Sendable {
         )
     }
 
-    private func waitForSSH(ssh: SSHClient) async throws {
+    private func waitForSSH(ssh: SSHClient) async -> Bool {
         var attempt = 0
+        let maxRetries = ssh.config.connectMaxRetries
         while true {
+            if let maxRetries, attempt >= maxRetries {
+                logger.warning("SSH not ready after \(maxRetries) attempts, restarting VM")
+                return false
+            }
             attempt += 1
             do {
                 try ssh.checkConnection()
-                return
+                return true
             } catch {
-                logger.info("SSH not ready, retrying in 1s (attempt \(attempt))")
-                try await Task.sleep(nanoseconds: 1_000_000_000)
+                if let maxRetries {
+                    logger.info("SSH not ready, retrying in 1s (attempt \(attempt)/\(maxRetries))")
+                } else {
+                    logger.info("SSH not ready, retrying in 1s (attempt \(attempt))")
+                }
+                do {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                } catch {
+                    return false
+                }
             }
         }
     }

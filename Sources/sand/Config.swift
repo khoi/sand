@@ -166,12 +166,14 @@ struct Config: Decodable {
         let user: String
         let password: String
         let port: Int
+        let connectMaxRetries: Int?
         static let standard = SSH(user: "admin", password: "admin", port: 22)
 
-        init(user: String, password: String, port: Int) {
+        init(user: String, password: String, port: Int, connectMaxRetries: Int? = nil) {
             self.user = user
             self.password = password
             self.port = port
+            self.connectMaxRetries = connectMaxRetries
         }
 
         init(from decoder: Decoder) throws {
@@ -179,12 +181,14 @@ struct Config: Decodable {
             self.user = try container.decodeIfPresent(String.self, forKey: .user) ?? "admin"
             self.password = try container.decodeIfPresent(String.self, forKey: .password) ?? "admin"
             self.port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 22
+            self.connectMaxRetries = try container.decodeIfPresent(Int.self, forKey: .connectMaxRetries)
         }
 
         private enum CodingKeys: String, CodingKey {
             case user
             case password
             case port
+            case connectMaxRetries
         }
     }
 

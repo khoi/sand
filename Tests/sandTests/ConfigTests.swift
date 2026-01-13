@@ -32,6 +32,7 @@ func parsesConfigAndExpandsPaths() throws {
             user: admin
             password: admin
             port: 22
+            connectMaxRetries: 20
         provisioner:
           type: github
           config:
@@ -64,6 +65,7 @@ func parsesConfigAndExpandsPaths() throws {
     #expect(config.runners.first?.vm.ssh.user == "admin")
     #expect(config.runners.first?.vm.ssh.password == "admin")
     #expect(config.runners.first?.vm.ssh.port == 22)
+    #expect(config.runners.first?.vm.ssh.connectMaxRetries == 20)
     #expect(config.runners.first?.vm.hardware?.display?.refit == true)
     #expect(config.runners.first?.provisioner.type == .github)
     #expect(config.runners.first?.provisioner.github?.organization == "acme")
@@ -108,6 +110,7 @@ func scriptProvisioner() throws {
     #expect(config.runners.first?.vm.ssh.user == "runner")
     #expect(config.runners.first?.vm.ssh.password == "secret")
     #expect(config.runners.first?.vm.ssh.port == 2222)
+    #expect(config.runners.first?.vm.ssh.connectMaxRetries == nil)
     #expect(config.runners.first?.provisioner.type == .script)
     #expect(config.runners.first?.provisioner.script?.run.contains("Hello World") == true)
     #expect(config.runners.first?.healthCheck?.interval == 30)

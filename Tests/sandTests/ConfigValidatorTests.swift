@@ -46,7 +46,7 @@ func invalidConfigReportsIssues() {
         mounts: [Config.DirectoryMount(hostPath: "/missing-mount", guestFolder: "", readOnly: false, tag: nil)],
         run: .default,
         diskSizeGb: 0,
-        ssh: Config.SSH(user: "", password: "", port: 70_000)
+        ssh: Config.SSH(user: "", password: "", port: 70_000, connectMaxRetries: 0)
     )
     let runner = Config.RunnerConfig(
         name: "runner-1",
@@ -66,6 +66,7 @@ func invalidConfigReportsIssues() {
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.user must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.password must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.port must be between 1 and 65535.")))
+    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.connectMaxRetries must be greater than 0.")))
     #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
     #expect(issues.contains(.init(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))

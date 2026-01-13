@@ -13,6 +13,9 @@ struct SSHClient {
             arguments: [
                 "-p", config.password,
                 "ssh",
+                "-o", "PreferredAuthentications=password",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "IdentitiesOnly=yes",
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
                 "-o", "LogLevel=ERROR",
