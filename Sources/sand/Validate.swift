@@ -5,7 +5,7 @@ import Logging
 @available(macOS 14.0, *)
 struct Validate: ParsableCommand {
     @Option(name: .shortAndLong)
-    var config: String = "sand.yml"
+    var config: String = Config.defaultPath
 
     func run() throws {
         LoggingSystem.bootstrap { label in

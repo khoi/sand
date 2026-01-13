@@ -14,7 +14,7 @@ struct Sand: AsyncParsableCommand {
 @available(macOS 14.0, *)
 struct Run: AsyncParsableCommand {
     @Option(name: .shortAndLong)
-    var config: String = "sand.yml"
+    var config: String = Config.defaultPath
 
     mutating func run() async throws {
         LoggingSystem.bootstrap { label in
