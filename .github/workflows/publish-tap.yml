@@ -4,7 +4,12 @@ on:
     types: [published]
 jobs:
   bottle:
-    runs-on: macos-15
+    strategy:
+      matrix:
+        macos:
+          - macos-15
+          - macos-26
+    runs-on: ${{ matrix.macos }}
     permissions:
       contents: write
     env:
