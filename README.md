@@ -5,7 +5,8 @@ Self-hosted macOS CI Runners powered by Tart - Apple's Virtualization framework.
 ## Requirements
 
 - macOS 15+ running on Apple Silicon machines.
-- Tart installed and available in PATH (https://tart.run/quick-start/)
+- Tart installed and available in PATH 
+- sand uses tart so it's good to understand tart before starting (https://tart.run/quick-start/)
 
 ## Install
 
