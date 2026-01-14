@@ -7,7 +7,12 @@ on:
   pull_request:
 jobs:
   e2e:
-    runs-on: macos-15-xlarge
+    strategy:
+      matrix:
+        runner:
+          - macos-15-xlarge
+          - macos-14-xlarge
+    runs-on: ${{ matrix.runner }}
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
