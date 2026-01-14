@@ -6,11 +6,16 @@ source "$ROOT/e2e-tests/lib/common.sh"
 printf '%s\n' "host info" >&2
 sw_vers >&2 || true
 uname -a >&2 || true
-sysctl -n kern.hv_support >&2 || true
+hv_support=$(sysctl -n kern.hv_support 2>/dev/null || true)
+printf '%s\n' "kern.hv_support=$hv_support" >&2
 sysctl -n kern.hv_vmm_present >&2 || true
 sysctl -n kern.hypervisor_support >&2 || true
 tart --version >&2 || true
 tart list >&2 || true
+
+if [ "$hv_support" != "1" ]; then
+  skip "hypervisor not supported"
+fi
 
 printf '%s\n' "tart pull ghcr.io/cirruslabs/ubuntu:latest" >&2
 tart pull ghcr.io/cirruslabs/ubuntu:latest
