@@ -61,8 +61,8 @@ jobs:
           brew install --build-from-source cirruslabs/cli/tart
           brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
-          gh release upload "${TAG}" ./*.bottle.tar.gz --clobber
-          brew bottle --merge --write ./*.bottle.json
+          gh release upload "${TAG}" ./*.bottle*.tar.gz --clobber
+          brew bottle --merge --write ./*.bottle*.json
           cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           git -C tap config user.name "github-actions"
           git -C tap config user.email "github-actions@github.com"
