@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 enum TartError: Error {
     case emptyIP
@@ -47,9 +48,11 @@ struct Tart {
     }
 
     let processRunner: ProcessRunning
+    let logger: Logger
 
-    init(processRunner: ProcessRunning) {
+    init(processRunner: ProcessRunning, logger: Logger) {
         self.processRunner = processRunner
+        self.logger = logger
     }
 
     func prepare(source: String) throws {
@@ -62,11 +65,11 @@ struct Tart {
     }
 
     func pull(source: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["pull", source], wait: true)
+        _ = try run(arguments: ["pull", source], wait: true)
     }
 
     func clone(source: String, name: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["clone", source, name], wait: true)
+        _ = try run(arguments: ["clone", source, name], wait: true)
     }
 
     func set(
@@ -96,7 +99,7 @@ struct Tart {
         guard arguments.count > 2 else {
             return
         }
-        _ = try processRunner.run(executable: "tart", arguments: arguments, wait: true)
+        _ = try run(arguments: arguments, wait: true)
     }
 
     func run(name: String, options: RunOptions = .default) throws {
@@ -114,11 +117,11 @@ struct Tart {
             arguments.append("--dir")
             arguments.append(mount.runArgument)
         }
-        _ = try processRunner.run(executable: "tart", arguments: arguments, wait: false)
+        _ = try run(arguments: arguments, wait: false)
     }
 
     func ip(name: String, wait: Int) throws -> String {
-        let result = try processRunner.run(executable: "tart", arguments: ["ip", name, "--wait", String(wait)], wait: true)
+        let result = try run(arguments: ["ip", name, "--wait", String(wait)], wait: true)
         let value = result?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if value.isEmpty {
             throw TartError.emptyIP
@@ -127,11 +130,11 @@ struct Tart {
     }
 
     func stop(name: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["stop", name], wait: true)
+        _ = try run(arguments: ["stop", name], wait: true)
     }
 
     func delete(name: String) throws {
-        _ = try processRunner.run(executable: "tart", arguments: ["delete", name], wait: true)
+        _ = try run(arguments: ["delete", name], wait: true)
     }
 
     private func isOCISource(_ source: String) -> Bool {
@@ -142,7 +145,7 @@ struct Tart {
     }
 
     private func hasOCI(source: String) throws -> Bool {
-        let result = try processRunner.run(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true)
+        let result = try run(arguments: ["list", "--source", "oci", "--quiet"], wait: true)
         let output = result?.stdout ?? ""
         let expected = normalizeOCI(source)
         return output
@@ -157,5 +160,10 @@ struct Tart {
             return String(source.dropFirst(prefix.count))
         }
         return source
+    }
+
+    private func run(arguments: [String], wait: Bool) throws -> ProcessResult? {
+        logger.debug("tart \(arguments.joined(separator: " "))")
+        return try processRunner.run(executable: "tart", arguments: arguments, wait: wait)
     }
 }

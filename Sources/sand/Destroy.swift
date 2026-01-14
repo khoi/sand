@@ -27,7 +27,7 @@ struct Destroy: ParsableCommand {
         for warning in issues where warning.severity == .warning {
             logger.warning("\(warning.message)")
         }
-        let tart = Tart(processRunner: SystemProcessRunner())
+        let tart = Tart(processRunner: SystemProcessRunner(), logger: Logger(label: "tart.destroy"))
         let destroyer = VMDestroyer(tart: tart, logger: logger)
         var firstError: Error?
         for runner in config.runners {

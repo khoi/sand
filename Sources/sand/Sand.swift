@@ -42,12 +42,13 @@ struct Run: AsyncParsableCommand {
         var cleanupTargets: [VMShutdownCoordinator] = []
         for (index, runnerConfig) in config.runners.enumerated() {
             let runnerIndex = index + 1
-            let tart = Tart(processRunner: processRunner)
+            let runnerName = runnerConfig.name
+            let logLabel = runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
+            let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)"))
             let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)")
             let destroyer = VMDestroyer(tart: tart, logger: shutdownLogger)
             let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer)
             cleanupTargets.append(shutdownCoordinator)
-            let runnerName = runnerConfig.name
             let github = try githubService(for: runnerConfig.provisioner)
             let runner = Runner(
                 tart: tart,
@@ -56,7 +57,7 @@ struct Run: AsyncParsableCommand {
                 config: runnerConfig,
                 shutdownCoordinator: shutdownCoordinator,
                 vmName: runnerName,
-                logLabel: runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
+                logLabel: logLabel
             )
             runners.append(runner)
         }

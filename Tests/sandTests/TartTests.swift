@@ -1,3 +1,4 @@
+import Logging
 import Testing
 @testable import sand
 
@@ -20,10 +21,14 @@ final class MockProcessRunner: ProcessRunning {
     }
 }
 
+func makeTart(_ runner: ProcessRunning) -> Tart {
+    Tart(processRunner: runner, logger: Logger(label: "tart.test"))
+}
+
 @Test
 func cloneArgs() throws {
     let runner = MockProcessRunner()
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     try tart.clone(source: "source", name: "ephemeral")
     #expect(runner.calls.first == .init(executable: "tart", arguments: ["clone", "source", "ephemeral"], wait: true))
 }
@@ -31,7 +36,7 @@ func cloneArgs() throws {
 @Test
 func runArgs() throws {
     let runner = MockProcessRunner()
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     try tart.run(name: "ephemeral")
     #expect(runner.calls.first == .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics"], wait: false))
 }
@@ -39,7 +44,7 @@ func runArgs() throws {
 @Test
 func runArgsWithOptions() throws {
     let runner = MockProcessRunner()
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     let options = Tart.RunOptions(
         directoryMounts: [
             Tart.DirectoryMount(hostPath: "/tmp/dir", guestFolder: "dir", readOnly: true, tag: "build")
@@ -59,7 +64,7 @@ func runArgsWithOptions() throws {
 @Test
 func setArgs() throws {
     let runner = MockProcessRunner()
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     let display = Tart.Display(width: 1920, height: 1080, unit: "px")
     try tart.set(name: "ephemeral", cpuCores: 4, memoryMb: 4096, display: display, displayRefit: true, diskSizeGb: 80)
     #expect(runner.calls.first == .init(
@@ -73,7 +78,7 @@ func setArgs() throws {
 func ipArgs() throws {
     let runner = MockProcessRunner()
     runner.results = [ProcessResult(stdout: "10.0.0.1\n", stderr: "", exitCode: 0)]
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     let ip = try tart.ip(name: "ephemeral", wait: 60)
     #expect(ip == "10.0.0.1")
     #expect(runner.calls.first == .init(executable: "tart", arguments: ["ip", "ephemeral", "--wait", "60"], wait: true))
@@ -83,7 +88,7 @@ func ipArgs() throws {
 func prepareSkipsPullWhenPresent() throws {
     let runner = MockProcessRunner()
     runner.results = [ProcessResult(stdout: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest\n", stderr: "", exitCode: 0)]
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
     #expect(runner.calls == [
         .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true)
@@ -97,7 +102,7 @@ func preparePullsWhenMissing() throws {
         ProcessResult(stdout: "", stderr: "", exitCode: 0),
         ProcessResult(stdout: "", stderr: "", exitCode: 0)
     ]
-    let tart = Tart(processRunner: runner)
+    let tart = makeTart(runner)
     try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
     #expect(runner.calls == [
         .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true),
