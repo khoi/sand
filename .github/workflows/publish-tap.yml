@@ -10,8 +10,6 @@ jobs:
           - macos-15
           - macos-26
     runs-on: ${{ matrix.macos }}
-    permissions:
-      contents: write
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
@@ -23,7 +21,6 @@ jobs:
       - env:
           TAG: ${{ github.event.release.tag_name }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           URL="https://github.com/khoi/sand/archive/refs/tags/${TAG}.tar.gz"
@@ -66,8 +63,70 @@ jobs:
           brew install --build-from-source cirruslabs/cli/tart
           brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
-          gh release upload "${TAG}" ./*.bottle*.tar.gz --clobber
-          brew bottle --merge --write ./*.bottle*.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bottle-${{ matrix.macos }}
+          path: |
+            *.bottle*.tar.gz
+            *.bottle*.json
+  publish:
+    needs: bottle
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - env:
+          TAG: ${{ github.event.release.tag_name }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" artifacts/*.bottle*.tar.gz --clobber
+          URL="https://github.com/khoi/sand/archive/refs/tags/${TAG}.tar.gz"
+          SHA=$(curl -Ls "$URL" | shasum -a 256 | awk '{print $1}')
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git" tap
+          mkdir -p tap/Formula
+          cp Formula/sand.rb tap/Formula/sand.rb
+          URL="$URL" SHA="$SHA" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          url = os.environ["URL"]
+          sha = os.environ["SHA"]
+          path = Path("tap/Formula/sand.rb")
+          lines = path.read_text().splitlines()
+          filtered = []
+          for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith("url "):
+              continue
+            if stripped.startswith("sha256 "):
+              continue
+            filtered.append(line)
+          out = []
+          inserted = False
+          for line in filtered:
+            out.append(line)
+            if line.lstrip().startswith("homepage ") and not inserted:
+              out.append(f'  url "{url}"')
+              out.append(f'  sha256 "{sha}"')
+              inserted = True
+          if not inserted:
+            raise SystemExit("homepage not found")
+          text = "\n".join(out)
+          if path.read_text().endswith("\n"):
+            text += "\n"
+          path.write_text(text)
+          PY
+          brew tap khoi/sand "$PWD/tap"
+          brew bottle --merge --write artifacts/*.bottle*.json
           cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           git -C tap config user.name "github-actions"
           git -C tap config user.email "github-actions@github.com"
