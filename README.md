@@ -21,6 +21,73 @@ sand run --config config.yml
 sand destroy --config config.yml
 ```
 
+## Run via launchd (optional)
+
+This runs `sand` as a per-user LaunchAgent (recommended over system-wide).
+
+1) Build/install the binary where launchd can find it (example):
+
+```
+swift build -c release
+mkdir -p ~/.local/bin
+install -m 755 .build/release/sand ~/.local/bin/sand
+```
+
+2) Create a LaunchAgent plist at `~/Library/LaunchAgents/com.khoi.sand.plist`:
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.khoi.sand</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/yourname/.local/bin/sand</string>
+    <string>run</string>
+    <string>--config</string>
+    <string>/Users/yourname/sand.yml</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>/Users/yourname</string>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/yourname/Library/Logs/sand.launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/yourname/Library/Logs/sand.launchd.err.log</string>
+</dict>
+</plist>
+```
+
+3) Load it (modern launchctl):
+
+```
+launchctl enable gui/$(id -u)/com.khoi.sand
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.khoi.sand.plist
+launchctl kickstart -k gui/$(id -u)/com.khoi.sand
+```
+
+To unload:
+
+```
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.khoi.sand.plist
+```
+
+You can inspect status with:
+
+```
+launchctl print gui/$(id -u)/com.khoi.sand
+```
+
 ## Logs
 
 sand logs to macOS default logging system using `os_log`. To see the log
