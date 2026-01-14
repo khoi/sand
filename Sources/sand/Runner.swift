@@ -89,7 +89,7 @@ struct Runner: @unchecked Sendable {
         logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
         logger.info("wait for VM IP")
-        let ip = try tart.ip(name: name, wait: 60)
+        let ip = try tart.ip(name: name, wait: 180)
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {

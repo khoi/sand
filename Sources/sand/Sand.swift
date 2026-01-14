@@ -3,14 +3,14 @@ import Darwin
 import Foundation
 
 @main
-@available(macOS 14.0, *)
+@available(macOS 15.0, *)
 struct Sand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         subcommands: [Run.self, Destroy.self, Doctor.self, Validate.self]
     )
 }
 
-@available(macOS 14.0, *)
+@available(macOS 15.0, *)
 struct Run: AsyncParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = Config.defaultPath
