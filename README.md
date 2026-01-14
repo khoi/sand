@@ -27,7 +27,7 @@ sand logs to macOS default logging system using `os_log`. To see the log
 
 ```
 log show --predicate "subsystem == \"sand\"" --last 1h --info --debug
-log stream --predicate 'subsystem == "sand"' --info --debug
+log stream --predicate 'subsystem == "sand"' --debug --info --style compact --color always
 ```
 
 ## Configuration
