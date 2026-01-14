@@ -21,19 +21,9 @@ sand run --config config.yml
 sand destroy --config config.yml
 ```
 
-## Run via launchd (optional)
+## Start up on boot
 
-This runs `sand` as a per-user LaunchAgent (recommended over system-wide).
-
-1) Build/install the binary where launchd can find it (example):
-
-```
-swift build -c release
-mkdir -p ~/.local/bin
-install -m 755 .build/release/sand ~/.local/bin/sand
-```
-
-2) Create a LaunchAgent plist at `~/Library/LaunchAgents/com.khoi.sand.plist`:
+2) Create a LaunchAgent plist at `~/Library/LaunchAgents/io.khoi.sand.plist`:
 
 ```
 <?xml version="1.0" encoding="UTF-8"?>
@@ -41,7 +31,7 @@ install -m 755 .build/release/sand ~/.local/bin/sand
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.khoi.sand</string>
+  <string>io.khoi.sand</string>
   <key>ProgramArguments</key>
   <array>
     <string>/Users/yourname/.local/bin/sand</string>
@@ -74,17 +64,6 @@ install -m 755 .build/release/sand ~/.local/bin/sand
 launchctl enable gui/$(id -u)/com.khoi.sand
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.khoi.sand.plist
 launchctl kickstart -k gui/$(id -u)/com.khoi.sand
-```
-
-To unload:
-
-```
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.khoi.sand.plist
-```
-
-You can inspect status with:
-
-```
 launchctl print gui/$(id -u)/com.khoi.sand
 ```
 
