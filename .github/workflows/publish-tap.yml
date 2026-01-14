@@ -88,12 +88,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          for path in artifacts/*.bottle*.tar.gz; do
+            base="$(basename "$path")"
+            renamed="${base/--/-}"
+            if [ "$renamed" != "$base" ]; then
+              mv "$path" "artifacts/$renamed"
+            fi
+          done
           gh release upload "${TAG}" artifacts/*.bottle*.tar.gz --clobber
           URL="https://github.com/khoi/sand/archive/refs/tags/${TAG}.tar.gz"
           SHA=$(curl -Ls "$URL" | shasum -a 256 | awk '{print $1}')
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git" tap
           mkdir -p tap/Formula
           cp Formula/sand.rb tap/Formula/sand.rb
+          brew tap khoi/sand "$PWD/tap"
+          brew bottle --merge --write artifacts/*.bottle*.json
+          cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           URL="$URL" SHA="$SHA" python3 - <<'PY'
           import os
           from pathlib import Path
@@ -125,9 +135,6 @@ jobs:
             text += "\n"
           path.write_text(text)
           PY
-          brew tap khoi/sand "$PWD/tap"
-          brew bottle --merge --write artifacts/*.bottle*.json
-          cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           git -C tap config user.name "github-actions"
           git -C tap config user.email "github-actions@github.com"
           git -C tap add Formula/sand.rb
