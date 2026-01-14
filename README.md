@@ -54,6 +54,7 @@ runners:
       interval: 30
       delay: 60
 ```
+On the first run, sand prebuilds a cached Tart image with the GitHub Actions runner installed to avoid downloading it on every boot.
 
 ### Custom provisioner script
 

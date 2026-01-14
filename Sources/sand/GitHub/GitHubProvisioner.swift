@@ -24,10 +24,11 @@ struct GitHubProvisionerConfig: Decodable {
 }
 
 struct GitHubProvisioner {
-    func script(config: GitHubProvisionerConfig, runnerToken: String) -> [String] {
-        let labels = labelsString(extraLabels: config.extraLabels)
-        let url = runnerURL(organization: config.organization, repository: config.repository)
-        return [
+    static let runnerVersion = "2.330.0"
+    static let runnerDirectory = "~/actions-runner"
+
+    func installScript() -> [String] {
+        [
             """
 os=$(uname -s)
 case "$os" in
@@ -42,18 +43,26 @@ case "$arch" in
   armv7l|armv6l) runner_arch=arm ;;
   *) echo "unsupported arch: $arch"; exit 1 ;;
 esac
-version="2.330.0"
+version="\(Self.runnerVersion)"
 asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
 download_url=https://github.com/actions/runner/releases/download/v${version}/${asset}
 echo $download_url
 curl -fsSL -o actions-runner.tar.gz -L ${download_url}
 """,
-            "rm -rf ~/actions-runner && mkdir ~/actions-runner",
-            "tar xzf ./actions-runner.tar.gz -C ~/actions-runner",
-            "echo \"Runner downloaded and extracted\"",
-            "~/actions-runner/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)",
-            "echo \"Runner script downloaded, starting ~/actions-runner/run.sh\"",
-            "~/actions-runner/run.sh"
+            "rm -rf \(Self.runnerDirectory) && mkdir \(Self.runnerDirectory)",
+            "tar xzf ./actions-runner.tar.gz -C \(Self.runnerDirectory)",
+            "rm -f ./actions-runner.tar.gz",
+            "echo \"Runner downloaded and extracted\""
+        ]
+    }
+
+    func runScript(config: GitHubProvisionerConfig, runnerToken: String) -> [String] {
+        let labels = labelsString(extraLabels: config.extraLabels)
+        let url = runnerURL(organization: config.organization, repository: config.repository)
+        return [
+            "\(Self.runnerDirectory)/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)",
+            "echo \"Runner starting \(Self.runnerDirectory)/run.sh\"",
+            "\(Self.runnerDirectory)/run.sh"
         ]
     }
 

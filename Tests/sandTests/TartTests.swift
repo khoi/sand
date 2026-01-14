@@ -86,10 +86,14 @@ func ipArgs() throws {
 @Test
 func prepareSkipsPullWhenPresent() throws {
     let runner = MockProcessRunner()
-    runner.results = [ProcessResult(stdout: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest\n", stderr: "", exitCode: 0)]
+    runner.results = [
+        ProcessResult(stdout: "", stderr: "", exitCode: 0),
+        ProcessResult(stdout: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest\n", stderr: "", exitCode: 0)
+    ]
     let tart = makeTart(runner)
     try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
     #expect(runner.calls == [
+        .init(executable: "tart", arguments: ["list", "--source", "local", "--quiet"], wait: true),
         .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true)
     ])
 }
@@ -104,6 +108,7 @@ func preparePullsWhenMissing() throws {
     let tart = makeTart(runner)
     try tart.prepare(source: "ghcr.io/cirruslabs/macos-tahoe-xcode:latest")
     #expect(runner.calls == [
+        .init(executable: "tart", arguments: ["list", "--source", "local", "--quiet"], wait: true),
         .init(executable: "tart", arguments: ["list", "--source", "oci", "--quiet"], wait: true),
         .init(executable: "tart", arguments: ["pull", "ghcr.io/cirruslabs/macos-tahoe-xcode:latest"], wait: true)
     ])

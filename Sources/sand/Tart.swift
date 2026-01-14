@@ -55,12 +55,16 @@ struct Tart {
     }
 
     func prepare(source: String) throws {
-        if isOCISource(source) {
-            if try hasOCI(source: source) {
-                return
-            }
-            try pull(source: source)
+        if isFileSource(source) {
+            return
         }
+        if try hasLocal(name: source) {
+            return
+        }
+        if try hasOCI(source: source) {
+            return
+        }
+        try pull(source: source)
     }
 
     func pull(source: String) throws {
@@ -136,11 +140,12 @@ struct Tart {
         _ = try run(arguments: ["delete", name], wait: true)
     }
 
-    private func isOCISource(_ source: String) -> Bool {
-        if source.hasPrefix("file://") {
-            return false
-        }
-        return true
+    func rename(oldName: String, newName: String) throws {
+        _ = try run(arguments: ["rename", oldName, newName], wait: true)
+    }
+
+    private func isFileSource(_ source: String) -> Bool {
+        source.hasPrefix("file://")
     }
 
     private func hasOCI(source: String) throws -> Bool {
@@ -151,6 +156,15 @@ struct Tart {
             .split(separator: "\n")
             .map { normalizeOCI(String($0)) }
             .contains(expected)
+    }
+
+    func hasLocal(name: String) throws -> Bool {
+        let result = try run(arguments: ["list", "--source", "local", "--quiet"], wait: true)
+        let output = result?.stdout ?? ""
+        return output
+            .split(separator: "\n")
+            .map(String.init)
+            .contains(name)
     }
 
     private func normalizeOCI(_ source: String) -> String {

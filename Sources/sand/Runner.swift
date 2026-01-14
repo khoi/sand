@@ -55,7 +55,15 @@ struct Runner: @unchecked Sendable {
         let name = vmName
         let vm = config.vm
         let provisionerConfig = config.provisioner
-        let source = vm.source.resolvedSource
+        let baseSource = vm.source.resolvedSource
+        let source: String
+        switch provisionerConfig.type {
+        case .github:
+            let prebuilder = GitHubRunnerPrebuilder(tart: tart, logger: logger, provisioner: provisioner)
+            source = try await prebuilder.prebuiltSource(baseSource: baseSource, vm: vm)
+        case .script:
+            source = baseSource
+        }
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
         logger.info("clone VM \(name) from \(source)")
@@ -64,7 +72,7 @@ struct Runner: @unchecked Sendable {
         defer {
             shutdownCoordinator.cleanup()
         }
-        try applyVMConfigIfNeeded(name: name, vm: vm)
+        try VMConfigurer.applyIfNeeded(tart: tart, name: name, vm: vm)
         let runOptions = Tart.RunOptions(
             directoryMounts: vm.mounts.map {
                 Tart.DirectoryMount(
@@ -84,7 +92,7 @@ struct Runner: @unchecked Sendable {
         let ip = try tart.ip(name: name, wait: 60)
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
-        guard await waitForSSH(ssh: ssh) else {
+        guard await SSHWaiter.wait(for: ssh, logger: logger) else {
             return
         }
         let healthCheckState = HealthCheckState()
@@ -117,7 +125,7 @@ struct Runner: @unchecked Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
-                let commands = provisioner.script(config: githubConfig, runnerToken: token)
+                let commands = provisioner.runScript(config: githubConfig, runnerToken: token)
                 for command in commands {
                     logScript(command)
                     let result = try ssh.exec(command: command)
@@ -136,55 +144,6 @@ struct Runner: @unchecked Sendable {
         }
         if healthCheckState.failureMessage != nil {
             return
-        }
-    }
-
-    private func applyVMConfigIfNeeded(name: String, vm: Config.VM) throws {
-        let hardware = vm.hardware
-        let display: Tart.Display? = hardware?.display.map {
-            Tart.Display(width: $0.width, height: $0.height, unit: $0.unit?.rawValue)
-        }
-        let displayRefit = hardware?.display?.refit
-        let memoryMb = hardware?.ramGb.map { $0 * 1024 }
-        let cpuCores = hardware?.cpuCores
-        let diskSizeGb = vm.diskSizeGb
-        guard cpuCores != nil || memoryMb != nil || display != nil || displayRefit != nil || diskSizeGb != nil else {
-            return
-        }
-        try tart.set(
-            name: name,
-            cpuCores: cpuCores,
-            memoryMb: memoryMb,
-            display: display,
-            displayRefit: displayRefit,
-            diskSizeGb: diskSizeGb
-        )
-    }
-
-    private func waitForSSH(ssh: SSHClient) async -> Bool {
-        var attempt = 0
-        let maxRetries = ssh.config.connectMaxRetries
-        while true {
-            if let maxRetries, attempt >= maxRetries {
-                logger.warning("SSH not ready after \(maxRetries) attempts, restarting VM")
-                return false
-            }
-            attempt += 1
-            do {
-                try ssh.checkConnection()
-                return true
-            } catch {
-                if let maxRetries {
-                    logger.info("SSH not ready, retrying in 1s (attempt \(attempt)/\(maxRetries))")
-                } else {
-                    logger.info("SSH not ready, retrying in 1s (attempt \(attempt))")
-                }
-                do {
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                } catch {
-                    return false
-                }
-            }
         }
     }
 
