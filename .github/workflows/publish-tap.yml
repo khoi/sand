@@ -58,7 +58,7 @@ jobs:
           path.write_text(text)
           PY
           brew tap khoi/sand "$PWD/tap"
-          brew install --build-bottle --build-from-source khoi/sand/sand
+          brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
           gh release upload "${TAG}" ./*.bottle.tar.gz --clobber
           brew bottle --merge --write ./*.bottle.json
