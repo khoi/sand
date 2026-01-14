@@ -1,0 +1,23 @@
+name: E2E
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  e2e:
+    runs-on: macos-15
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.tart/cache/OCIs
+          key: ${{ runner.os }}-tart-oci-${{ hashFiles('fixtures/*.yml', 'e2e-tests/cases/run.t') }}
+      - run: brew install tart sshpass
+      - run: e2e-tests/run

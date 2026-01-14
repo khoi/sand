@@ -6,6 +6,7 @@ struct Runner: @unchecked Sendable {
     let provisioner: GitHubProvisioner
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
+    let destroyer: VMDestroyer
     let vmName: String
     private let logger: Logger
     private let vmLogger: Logger
@@ -22,6 +23,7 @@ struct Runner: @unchecked Sendable {
         provisioner: GitHubProvisioner,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
+        destroyer: VMDestroyer,
         vmName: String,
         logLabel: String,
         logLevel: LogLevel
@@ -31,6 +33,7 @@ struct Runner: @unchecked Sendable {
         self.provisioner = provisioner
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
+        self.destroyer = destroyer
         self.vmName = vmName
         self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
         self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
@@ -58,6 +61,11 @@ struct Runner: @unchecked Sendable {
         let source = vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
+        do {
+            try destroyer.destroy(name: name)
+        } catch {
+            logger.warning("preflight cleanup failed: \(String(describing: error))")
+        }
         logger.info("clone VM \(name) from \(source)")
         try tart.clone(source: source, name: name)
         shutdownCoordinator.activate(name: name)
