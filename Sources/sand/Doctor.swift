@@ -1,40 +1,56 @@
 import ArgumentParser
 import Foundation
-import Logging
+
+struct StderrOutputStream: TextOutputStream {
+    mutating func write(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            FileHandle.standardError.write(data)
+        }
+    }
+}
 
 @available(macOS 14.0, *)
 struct Doctor: ParsableCommand {
+    @OptionGroup
+    var logLevel: LogLevelOptions
+
     func run() throws {
-        LoggingSystem.bootstrap { label in
-            StreamLogHandler.standardOutput(label: label)
+        var stderr = StderrOutputStream()
+        let issues = collectIssues { message in
+            print(message, to: &stderr)
         }
-        let issues = collectIssues()
         let errors = issues.filter { $0.severity == .error }
         if issues.isEmpty {
-            print("Your system is ready to run sand.")
+            print("Your system is ready to run sand.", to: &stderr)
             return
         }
-        print("sand doctor found issues:")
+        print("sand doctor found issues:", to: &stderr)
         for issue in issues {
-            print("- [\(issue.severity.rawValue)] \(issue.message)")
+            print("- [\(issue.severity.rawValue)] \(issue.message)", to: &stderr)
         }
         if !errors.isEmpty {
             throw ExitCode(1)
         }
     }
 
-    private func collectIssues() -> [ConfigValidationIssue] {
+    private func collectIssues(_ report: (String) -> Void) -> [ConfigValidationIssue] {
         var issues: [ConfigValidationIssue] = []
-        let missing = DependencyChecker.missingCommands(["tart", "sshpass", "ssh"])
+        let dependencies = ["tart", "sshpass", "ssh"]
+        report("sand doctor checks:")
+        report("- dependencies: \(dependencies.joined(separator: ", "))")
+        let missing = DependencyChecker.missingCommands(dependencies)
         if !missing.isEmpty {
             issues.append(.init(
                 severity: .error,
                 message: "Missing required dependencies in PATH: \(missing.joined(separator: ", "))."
             ))
         } else {
+            report("- tart command health")
             issues.append(contentsOf: checkTartHealth())
         }
-        issues.append(contentsOf: checkConfig())
+        let defaultPath = Config.expandPath(Config.defaultPath)
+        report("- config at \(defaultPath)")
+        issues.append(contentsOf: checkConfig(at: defaultPath))
         return issues
     }
 
@@ -48,12 +64,11 @@ struct Doctor: ParsableCommand {
         }
     }
 
-    private func checkConfig() -> [ConfigValidationIssue] {
-        let defaultPath = Config.expandPath(Config.defaultPath)
-        guard FileManager.default.fileExists(atPath: defaultPath) else {
+    private func checkConfig(at path: String) -> [ConfigValidationIssue] {
+        guard FileManager.default.fileExists(atPath: path) else {
             return []
         }
-        return validateConfig(at: defaultPath)
+        return validateConfig(at: path)
     }
 
     private func validateConfig(at path: String) -> [ConfigValidationIssue] {

@@ -1,5 +1,4 @@
 import Foundation
-import Logging
 
 struct VMDestroyer {
     let tart: Tart

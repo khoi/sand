@@ -1,5 +1,4 @@
 import Foundation
-import Logging
 
 enum TartError: Error {
     case emptyIP

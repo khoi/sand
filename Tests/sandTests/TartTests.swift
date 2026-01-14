@@ -1,4 +1,3 @@
-import Logging
 import Testing
 @testable import sand
 
@@ -22,7 +21,7 @@ final class MockProcessRunner: ProcessRunning {
 }
 
 func makeTart(_ runner: ProcessRunning) -> Tart {
-    Tart(processRunner: runner, logger: Logger(label: "tart.test"))
+    Tart(processRunner: runner, logger: Logger(label: "tart.test", minimumLevel: .info))
 }
 
 @Test

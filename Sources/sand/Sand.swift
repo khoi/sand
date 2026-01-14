@@ -1,7 +1,6 @@
 import ArgumentParser
 import Darwin
 import Foundation
-import Logging
 
 @main
 @available(macOS 14.0, *)
@@ -15,12 +14,12 @@ struct Sand: AsyncParsableCommand {
 struct Run: AsyncParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = Config.defaultPath
+    @OptionGroup
+    var logLevel: LogLevelOptions
 
     mutating func run() async throws {
-        LoggingSystem.bootstrap { label in
-            StreamLogHandler.standardOutput(label: label)
-        }
-        let logger = Logger(label: "sand")
+        let level = logLevel.resolvedLevel()
+        let logger = Logger(label: "sand", minimumLevel: level)
         let missing = DependencyChecker.missingCommands(["tart", "sshpass", "ssh"])
         if !missing.isEmpty {
             throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
@@ -44,8 +43,8 @@ struct Run: AsyncParsableCommand {
             let runnerIndex = index + 1
             let runnerName = runnerConfig.name
             let logLabel = runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
-            let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)"))
-            let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)")
+            let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level))
+            let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)", minimumLevel: level)
             let destroyer = VMDestroyer(tart: tart, logger: shutdownLogger)
             let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer)
             cleanupTargets.append(shutdownCoordinator)
@@ -57,11 +56,12 @@ struct Run: AsyncParsableCommand {
                 config: runnerConfig,
                 shutdownCoordinator: shutdownCoordinator,
                 vmName: runnerName,
-                logLabel: logLabel
+                logLabel: logLabel,
+                logLevel: level
             )
             runners.append(runner)
         }
-        let shutdownLogger = Logger(label: "sand.shutdown")
+        let shutdownLogger = Logger(label: "sand.shutdown", minimumLevel: level)
         let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
             for coordinator in cleanupTargets {
                 coordinator.cleanup()

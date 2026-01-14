@@ -1,5 +1,4 @@
 import Foundation
-import Logging
 
 struct Runner: @unchecked Sendable {
     let tart: Tart
@@ -24,7 +23,8 @@ struct Runner: @unchecked Sendable {
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
         vmName: String,
-        logLabel: String
+        logLabel: String,
+        logLevel: LogLevel
     ) {
         self.tart = tart
         self.github = github
@@ -32,8 +32,8 @@ struct Runner: @unchecked Sendable {
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
         self.vmName = vmName
-        self.logger = Logger(label: "host.\(logLabel)")
-        self.vmLogger = Logger(label: "vm.\(logLabel)")
+        self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
+        self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
     }
 
     func run() async throws {
@@ -263,9 +263,9 @@ struct Runner: @unchecked Sendable {
         return UInt64(nanos)
     }
 
-    private func logLines(logger: Logger, _ text: String, level: Logger.Level) {
+    private func logLines(logger: Logger, _ text: String, level: LogLevel) {
         for line in text.split(whereSeparator: \.isNewline) {
-            logger.log(level: level, "\(line)")
+            logger.log(level, "\(line)")
         }
     }
 
@@ -277,7 +277,7 @@ struct Runner: @unchecked Sendable {
     }
 
     private func logScript(_ script: String) {
-        vmLogger.log(level: .info, "[executing]\n\(script)")
+        vmLogger.log(.info, "[executing]\n\(script)")
     }
 }
 

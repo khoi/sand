@@ -21,6 +21,14 @@ sand run --config config.yml
 sand destroy --config config.yml
 ```
 
+## Logs
+
+sand logs to macOS default logging system using `os_log`. To see the log
+
+```
+log stream --predicate 'subsystem == "sand"' --info --debug
+```
+
 ## Configuration
 
 Create a `config.yml` and run the CLI with `--config`. 

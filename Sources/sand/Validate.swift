@@ -1,16 +1,14 @@
 import ArgumentParser
 import Foundation
-import Logging
 
 @available(macOS 14.0, *)
 struct Validate: ParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = Config.defaultPath
+    @OptionGroup
+    var logLevel: LogLevelOptions
 
     func run() throws {
-        LoggingSystem.bootstrap { label in
-            StreamLogHandler.standardOutput(label: label)
-        }
         let expandedPath = Config.expandPath(config)
         guard FileManager.default.fileExists(atPath: expandedPath) else {
             throw ValidationError("Config file not found at \(expandedPath).")

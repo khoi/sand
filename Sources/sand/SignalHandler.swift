@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import Logging
 
 final class SignalHandler {
     private let lock = NSLock()
