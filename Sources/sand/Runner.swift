@@ -96,14 +96,14 @@ struct Runner: @unchecked Sendable {
             return
         }
         let healthCheckState = HealthCheckState()
-        let healthCheckTask = startHealthCheckIfNeeded(
-            healthCheck: config.healthCheck,
+        let healthCheckTask = startHealthCheck(
+            healthCheck: config.healthCheck ?? .standard,
             ip: ip,
             ssh: vm.ssh,
             state: healthCheckState
         )
         defer {
-            healthCheckTask?.cancel()
+            healthCheckTask.cancel()
         }
         do {
             switch provisionerConfig.type {
@@ -211,15 +211,12 @@ struct Runner: @unchecked Sendable {
         }
     }
 
-    private func startHealthCheckIfNeeded(
-        healthCheck: Config.HealthCheck?,
+    private func startHealthCheck(
+        healthCheck: Config.HealthCheck,
         ip: String,
         ssh: Config.SSH,
         state: HealthCheckState
-    ) -> Task<Void, Never>? {
-        guard let healthCheck else {
-            return nil
-        }
+    ) -> Task<Void, Never> {
         logger.info("healthCheck starting in \(healthCheck.delay)s")
         return Task {
             if healthCheck.delay > 0 {
