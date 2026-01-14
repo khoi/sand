@@ -55,7 +55,10 @@ runners:
 YAML
 
 run_cmd "$SAND_BIN" run --config "$dir/sand.yml"
-assert_eq 0 "$RUN_STATUS"
+if [ "$RUN_STATUS" -ne 0 ]; then
+  printf '%s\n' "$RUN_OUTPUT" >&2
+  fail "sand run exited $RUN_STATUS"
+fi
 
 output1="$dir/out-1.txt"
 output2="$dir/out-2.txt"
