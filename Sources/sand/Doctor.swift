@@ -9,7 +9,7 @@ struct StderrOutputStream: TextOutputStream {
     }
 }
 
-@available(macOS 14.0, *)
+@available(macOS 15.0, *)
 struct Doctor: ParsableCommand {
     @OptionGroup
     var logLevel: LogLevelOptions

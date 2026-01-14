@@ -193,6 +193,8 @@ struct Config: Decodable {
     }
 
     struct HealthCheck: Decodable {
+        static let defaultCommand = "echo healthcheck"
+        static let standard = HealthCheck(command: defaultCommand)
         private static let defaultInterval: TimeInterval = 30
         private static let defaultDelay: TimeInterval = 60
 

@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 
-@available(macOS 14.0, *)
+@available(macOS 15.0, *)
 struct Validate: ParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = Config.defaultPath

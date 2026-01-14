@@ -4,7 +4,7 @@ Self-hosted macOS CI Runners powered by Tart - Apple's Virtualization framework.
 
 ## Requirements
 
-- macOS running on Apple Silicon machines.
+- macOS 15+ running on Apple Silicon machines.
 - Tart installed and available in PATH (https://tart.run/quick-start/)
 
 ## Install
@@ -26,7 +26,8 @@ sand destroy --config config.yml
 sand logs to macOS default logging system using `os_log`. To see the log
 
 ```
-log stream --predicate 'subsystem == "sand"' --info --debug
+log show --predicate "subsystem == \"sand\"" --last 1h --info --debug
+log stream --predicate 'subsystem == "sand"' --debug --info --style compact --color always
 ```
 
 ## Configuration
@@ -78,6 +79,8 @@ runners:
     healthCheck:
       command: "true"
 ```
+
+If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
 
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml)
 

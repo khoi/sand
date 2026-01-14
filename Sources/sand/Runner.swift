@@ -58,6 +58,14 @@ struct Runner: @unchecked Sendable {
         let source = vm.source.resolvedSource
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
+        do {
+            if try tart.isRunning(name: name) {
+                logger.info("VM \(name) already running, stopping before boot")
+                try tart.stop(name: name)
+            }
+        } catch {
+            logger.warning("preflight cleanup failed: \(String(describing: error))")
+        }
         logger.info("clone VM \(name) from \(source)")
         try tart.clone(source: source, name: name)
         shutdownCoordinator.activate(name: name)
@@ -81,21 +89,21 @@ struct Runner: @unchecked Sendable {
         logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
         logger.info("wait for VM IP")
-        let ip = try tart.ip(name: name, wait: 60)
+        let ip = try await resolveIP(name: name)
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {
             return
         }
         let healthCheckState = HealthCheckState()
-        let healthCheckTask = startHealthCheckIfNeeded(
-            healthCheck: config.healthCheck,
+        let healthCheckTask = startHealthCheck(
+            healthCheck: config.healthCheck ?? .standard,
             ip: ip,
             ssh: vm.ssh,
             state: healthCheckState
         )
         defer {
-            healthCheckTask?.cancel()
+            healthCheckTask.cancel()
         }
         do {
             switch provisionerConfig.type {
@@ -188,15 +196,27 @@ struct Runner: @unchecked Sendable {
         }
     }
 
-    private func startHealthCheckIfNeeded(
-        healthCheck: Config.HealthCheck?,
+    private func resolveIP(name: String) async throws -> String {
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                return try tart.ip(name: name, wait: 180)
+            } catch {
+                if attempt >= 3 {
+                    throw error
+                }
+                try await Task.sleep(nanoseconds: nanos(from: 5))
+            }
+        }
+    }
+
+    private func startHealthCheck(
+        healthCheck: Config.HealthCheck,
         ip: String,
         ssh: Config.SSH,
         state: HealthCheckState
-    ) -> Task<Void, Never>? {
-        guard let healthCheck else {
-            return nil
-        }
+    ) -> Task<Void, Never> {
         logger.info("healthCheck starting in \(healthCheck.delay)s")
         return Task {
             if healthCheck.delay > 0 {

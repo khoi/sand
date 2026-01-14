@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "sand",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "sand", targets: ["sand"])
