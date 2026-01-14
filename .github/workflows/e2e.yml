@@ -11,7 +11,6 @@ concurrency:
 jobs:
   e2e:
     strategy:
-      max-parallel: 1
       matrix:
         runner:
           - macos-15-xlarge
