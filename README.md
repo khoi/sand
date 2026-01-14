@@ -23,7 +23,9 @@ sand destroy --config config.yml
 
 ## Start up on boot
 
-2) Create a LaunchAgent plist at `~/Library/LaunchAgents/io.khoi.sand.plist`:
+To make sand run on boot, u can leverage launchctl as an option
+
+1) Create a LaunchAgent plist at `~/Library/LaunchAgents/io.khoi.sand.plist`:
 
 ```
 <?xml version="1.0" encoding="UTF-8"?>
@@ -58,7 +60,7 @@ sand destroy --config config.yml
 </plist>
 ```
 
-3) Load it (modern launchctl):
+2) Load it (modern launchctl):
 
 ```
 launchctl enable gui/$(id -u)/com.khoi.sand
