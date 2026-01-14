@@ -2,6 +2,8 @@ name: Publish Tap
 on:
   release:
     types: [published]
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
 jobs:
   bottle:
     strategy:
@@ -10,8 +12,6 @@ jobs:
           - macos-15
           - macos-26
     runs-on: ${{ matrix.macos }}
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
@@ -28,38 +28,10 @@ jobs:
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git" tap
           mkdir -p tap/Formula
           cp Formula/sand.rb tap/Formula/sand.rb
-          URL="$URL" SHA="$SHA" python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          url = os.environ["URL"]
-          sha = os.environ["SHA"]
-          path = Path("tap/Formula/sand.rb")
-          lines = path.read_text().splitlines()
-          filtered = []
-          for line in lines:
-            stripped = line.lstrip()
-            if stripped.startswith("url "):
-              continue
-            if stripped.startswith("sha256 "):
-              continue
-            filtered.append(line)
-          out = []
-          inserted = False
-          for line in filtered:
-            out.append(line)
-            if line.lstrip().startswith("homepage ") and not inserted:
-              out.append(f'  url "{url}"')
-              out.append(f'  sha256 "{sha}"')
-              inserted = True
-          if not inserted:
-            raise SystemExit("homepage not found")
-          text = "\n".join(out)
-          if path.read_text().endswith("\n"):
-            text += "\n"
-          path.write_text(text)
-          PY
           brew tap khoi/sand "$PWD/tap"
+          TAP_REPO="$(brew --repo khoi/sand)"
+          FORMULA_PATH="${TAP_REPO}/Formula/sand.rb"
+          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 scripts/patch-formula-url.py
           brew install --build-from-source cirruslabs/cli/tart
           brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
@@ -74,8 +46,6 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -102,39 +72,10 @@ jobs:
           mkdir -p tap/Formula
           cp Formula/sand.rb tap/Formula/sand.rb
           brew tap khoi/sand "$PWD/tap"
+          FORMULA_PATH="$(brew --repo khoi/sand)/Formula/sand.rb"
+          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 scripts/patch-formula-url.py
           brew bottle --merge --write artifacts/*.bottle*.json
           cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
-          URL="$URL" SHA="$SHA" python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          url = os.environ["URL"]
-          sha = os.environ["SHA"]
-          path = Path("tap/Formula/sand.rb")
-          lines = path.read_text().splitlines()
-          filtered = []
-          for line in lines:
-            stripped = line.lstrip()
-            if stripped.startswith("url "):
-              continue
-            if stripped.startswith("sha256 "):
-              continue
-            filtered.append(line)
-          out = []
-          inserted = False
-          for line in filtered:
-            out.append(line)
-            if line.lstrip().startswith("homepage ") and not inserted:
-              out.append(f'  url "{url}"')
-              out.append(f'  sha256 "{sha}"')
-              inserted = True
-          if not inserted:
-            raise SystemExit("homepage not found")
-          text = "\n".join(out)
-          if path.read_text().endswith("\n"):
-            text += "\n"
-          path.write_text(text)
-          PY
           git -C tap config user.name "github-actions"
           git -C tap config user.email "github-actions@github.com"
           git -C tap add Formula/sand.rb
