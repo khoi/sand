@@ -31,7 +31,7 @@ jobs:
           brew tap khoi/sand "$PWD/tap"
           TAP_REPO="$(brew --repo khoi/sand)"
           FORMULA_PATH="${TAP_REPO}/Formula/sand.rb"
-          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 scripts/patch-formula-url.py
+          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 .github/workflows/patch-formula-url.py
           brew install --build-from-source cirruslabs/cli/tart
           brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
@@ -73,7 +73,7 @@ jobs:
           cp Formula/sand.rb tap/Formula/sand.rb
           brew tap khoi/sand "$PWD/tap"
           FORMULA_PATH="$(brew --repo khoi/sand)/Formula/sand.rb"
-          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 scripts/patch-formula-url.py
+          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 .github/workflows/patch-formula-url.py
           brew bottle --merge --write artifacts/*.bottle*.json
           cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           git -C tap config user.name "github-actions"
