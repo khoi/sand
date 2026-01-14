@@ -80,6 +80,8 @@ runners:
       command: "true"
 ```
 
+If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
+
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml)
 
 ## Acknowledgements
