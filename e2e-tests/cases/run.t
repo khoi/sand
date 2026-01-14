@@ -57,6 +57,11 @@ YAML
 run_cmd "$SAND_BIN" run --config "$dir/sand.yml"
 if [ "$RUN_STATUS" -ne 0 ]; then
   printf '%s\n' "$RUN_OUTPUT" >&2
+  tart list >&2 || true
+  list=$(tart list --quiet 2>/dev/null || true)
+  printf '%s\n' "$list" >&2
+  printf '%s\n' "$list" | grep -qx "$name1" && tart get "$name1" >&2 || true
+  printf '%s\n' "$list" | grep -qx "$name2" && tart get "$name2" >&2 || true
   fail "sand run exited $RUN_STATUS"
 fi
 
