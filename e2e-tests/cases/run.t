@@ -3,6 +3,9 @@ set -euo pipefail
 
 source "$ROOT/e2e-tests/lib/common.sh"
 
+printf '%s\n' "tart pull ghcr.io/cirruslabs/ubuntu:latest" >&2
+tart pull ghcr.io/cirruslabs/ubuntu:latest
+
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 name1="e2e-runner-${RANDOM}-${RANDOM}"
