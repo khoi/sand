@@ -5,13 +5,16 @@ on:
     branches:
       - main
   pull_request:
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   e2e:
     strategy:
       matrix:
         runner:
           - macos-15-xlarge
-          - macos-14-xlarge
+          - macos-26-xlarge
     runs-on: ${{ matrix.runner }}
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
