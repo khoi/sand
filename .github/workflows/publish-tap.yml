@@ -28,13 +28,16 @@ jobs:
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git" tap
           mkdir -p tap/Formula
           cp Formula/sand.rb tap/Formula/sand.rb
-          URL="$URL" SHA="$SHA" python3 - <<'PY'
+          brew tap khoi/sand "$PWD/tap"
+          TAP_REPO="$(brew --repo khoi/sand)"
+          FORMULA_PATH="${TAP_REPO}/Formula/sand.rb"
+          URL="$URL" SHA="$SHA" FORMULA_PATH="$FORMULA_PATH" python3 - <<'PY'
           import os
           from pathlib import Path
 
           url = os.environ["URL"]
           sha = os.environ["SHA"]
-          path = Path("tap/Formula/sand.rb")
+          path = Path(os.environ["FORMULA_PATH"])
           lines = path.read_text().splitlines()
           filtered = []
           for line in lines:
@@ -59,7 +62,6 @@ jobs:
             text += "\n"
           path.write_text(text)
           PY
-          brew tap khoi/sand "$PWD/tap"
           brew install --build-from-source cirruslabs/cli/tart
           brew install --build-bottle khoi/sand/sand
           brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
