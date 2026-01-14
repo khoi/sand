@@ -3,17 +3,26 @@ on:
   release:
     types: [published]
 jobs:
-  tap:
-    runs-on: ubuntu-latest
+  bottle:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+      - run: echo "HOMEBREW_SWIFT=$(which swift)" >> "$GITHUB_ENV"
       - env:
           TAG: ${{ github.event.release.tag_name }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           URL="https://github.com/khoi/sand/archive/refs/tags/${TAG}.tar.gz"
-          SHA=$(curl -Ls "$URL" | sha256sum | awk '{print $1}')
+          SHA=$(curl -Ls "$URL" | shasum -a 256 | awk '{print $1}')
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git" tap
           mkdir -p tap/Formula
           cp Formula/sand.rb tap/Formula/sand.rb
@@ -48,6 +57,12 @@ jobs:
             text += "\n"
           path.write_text(text)
           PY
+          brew tap khoi/sand "$PWD/tap"
+          brew install --build-bottle khoi/sand/sand
+          brew bottle --json --root-url "https://github.com/khoi/sand/releases/download/${TAG}" khoi/sand/sand
+          gh release upload "${TAG}" ./*.bottle.tar.gz --clobber
+          brew bottle --merge --write ./*.bottle.json
+          cp "$(brew --repo khoi/sand)/Formula/sand.rb" tap/Formula/sand.rb
           git -C tap config user.name "github-actions"
           git -C tap config user.email "github-actions@github.com"
           git -C tap add Formula/sand.rb
