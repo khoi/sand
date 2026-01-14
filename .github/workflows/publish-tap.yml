@@ -68,4 +68,5 @@ jobs:
           git -C tap config user.email "github-actions@github.com"
           git -C tap add Formula/sand.rb
           git -C tap commit -m "Update sand ${TAG}" || exit 0
+          git -C tap remote set-url origin "https://x-access-token:${TAP_TOKEN}@github.com/khoi/homebrew-sand.git"
           git -C tap push origin main
