@@ -6,7 +6,6 @@ struct Runner: @unchecked Sendable {
     let provisioner: GitHubProvisioner
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
-    let destroyer: VMDestroyer
     let vmName: String
     private let logger: Logger
     private let vmLogger: Logger
@@ -23,7 +22,6 @@ struct Runner: @unchecked Sendable {
         provisioner: GitHubProvisioner,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
-        destroyer: VMDestroyer,
         vmName: String,
         logLabel: String,
         logLevel: LogLevel
@@ -33,7 +31,6 @@ struct Runner: @unchecked Sendable {
         self.provisioner = provisioner
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
-        self.destroyer = destroyer
         self.vmName = vmName
         self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
         self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
@@ -62,7 +59,10 @@ struct Runner: @unchecked Sendable {
         logger.info("prepare source \(source)")
         try tart.prepare(source: source)
         do {
-            try destroyer.destroy(name: name)
+            if try tart.isRunning(name: name) {
+                logger.info("VM \(name) already running, stopping before boot")
+                try tart.stop(name: name)
+            }
         } catch {
             logger.warning("preflight cleanup failed: \(String(describing: error))")
         }
@@ -89,7 +89,7 @@ struct Runner: @unchecked Sendable {
         logger.info("boot VM \(name)")
         try tart.run(name: name, options: runOptions)
         logger.info("wait for VM IP")
-        let ip = try tart.ip(name: name, wait: 180)
+        let ip = try await resolveIP(name: name)
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {
@@ -192,6 +192,21 @@ struct Runner: @unchecked Sendable {
                 } catch {
                     return false
                 }
+            }
+        }
+    }
+
+    private func resolveIP(name: String) async throws -> String {
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                return try tart.ip(name: name, wait: 180)
+            } catch {
+                if attempt >= 3 {
+                    throw error
+                }
+                try await Task.sleep(nanoseconds: nanos(from: 5))
             }
         }
     }

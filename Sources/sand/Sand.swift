@@ -55,7 +55,6 @@ struct Run: AsyncParsableCommand {
                 provisioner: provisioner,
                 config: runnerConfig,
                 shutdownCoordinator: shutdownCoordinator,
-                destroyer: destroyer,
                 vmName: runnerName,
                 logLabel: logLabel,
                 logLevel: level

@@ -136,6 +136,15 @@ struct Tart {
         _ = try run(arguments: ["delete", name], wait: true)
     }
 
+    func isRunning(name: String) throws -> Bool {
+        let result = try run(arguments: ["list", "--running", "--quiet"], wait: true)
+        let output = result?.stdout ?? ""
+        return output
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .contains(name)
+    }
+
     private func isOCISource(_ source: String) -> Bool {
         if source.hasPrefix("file://") {
             return false
