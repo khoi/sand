@@ -1,0 +1,53 @@
+[[runners]]
+name = "runner-1"
+stopAfter = 1
+
+[runners.vm.source]
+type = "oci"
+image = "ghcr.io/cirruslabs/ubuntu:latest"
+
+[runners.vm.hardware]
+ramGb = 4
+
+[runners.vm.ssh]
+user = "admin"
+password = "admin"
+port = 22
+
+[runners.provisioner]
+type = "script"
+
+[runners.provisioner.config]
+run = '''
+echo "Hello World from runner 1"
+'''
+
+[runners.healthCheck]
+command = "true"
+
+[[runners]]
+name = "runner-2"
+stopAfter = 1
+
+[runners.vm.source]
+type = "oci"
+image = "ghcr.io/cirruslabs/ubuntu:latest"
+
+[runners.vm.hardware]
+ramGb = 4
+
+[runners.vm.ssh]
+user = "admin"
+password = "admin"
+port = 22
+
+[runners.provisioner]
+type = "script"
+
+[runners.provisioner.config]
+run = '''
+echo "Hello World from runner 2"
+'''
+
+[runners.healthCheck]
+command = "true"

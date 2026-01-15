@@ -1,5 +1,5 @@
 {
-  "originHash" : "41b1cafdabe0fcb751873294075449ba8dfd7b7d15b6597518bfcfa4d193fe46",
+  "originHash" : "5b64952ecc2c6b82e2fe8cf1776c7f24ff6bdbe1396faac5d8a6b2c64d5687fc",
   "pins" : [
     {
       "identity" : "bluecryptor",
@@ -92,12 +92,12 @@
       }
     },
     {
-      "identity" : "yams",
+      "identity" : "tomldecoder",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jpsim/Yams.git",
+      "location" : "https://github.com/dduan/TOMLDecoder.git",
       "state" : {
-        "revision" : "3d6871d5b4a5cd519adf233fbb576e0a2af71c17",
-        "version" : "5.4.0"
+        "revision" : "f4388e05c035d6430e94022c353123abc020f1c4",
+        "version" : "0.4.3"
       }
     }
   ],

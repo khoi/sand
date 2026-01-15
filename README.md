@@ -18,8 +18,8 @@ brew install sand
 ## Usage
 
 ```
-sand run --config config.yml
-sand destroy --config config.yml
+sand run --config config.toml
+sand destroy --config config.toml
 ```
 
 ## Start up on boot
@@ -40,7 +40,7 @@ To make sand run on boot, u can leverage launchctl as an option
     <string>/Users/yourname/.local/bin/sand</string>
     <string>run</string>
     <string>--config</string>
-    <string>/Users/yourname/sand.yml</string>
+    <string>/Users/yourname/sand.toml</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -81,52 +81,61 @@ log stream --predicate 'subsystem == "sand"' --debug --info --style compact --co
 
 ## Configuration
 
-Create a `config.yml` and run the CLI with `--config`. 
+Create a `config.toml` and run the CLI with `--config`. 
 
 ### GitHub Actions runner provisioner
 ```
-runners:
-  - name: runner-1
-    vm:
-      source:
-        type: oci
-        image: ghcr.io/cirruslabs/macos-runner:tahoe
-    provisioner:
-      type: github
-      config:
-        appId: 123456
-        organization: my-org
-        repository: my-repo
-        privateKeyPath: ~/my-app.private-key.pem
-        runnerName: runner-1
-    healthCheck:
-      command: "pgrep -fl /Users/admin/actions-runner/run.sh"
-      interval: 30
-      delay: 60
+[[runners]]
+name = "runner-1"
+
+[runners.vm.source]
+type = "oci"
+image = "ghcr.io/cirruslabs/macos-runner:tahoe"
+
+[runners.provisioner]
+type = "github"
+
+[runners.provisioner.config]
+appId = 123456
+organization = "my-org"
+repository = "my-repo"
+privateKeyPath = "~/my-app.private-key.pem"
+runnerName = "runner-1"
+
+[runners.healthCheck]
+command = "pgrep -fl /Users/admin/actions-runner/run.sh"
+interval = 30
+delay = 60
 ```
 
 ### Custom provisioner script
 
 ```
-runners:
-  - name: runner-1
-    vm:
-      source:
-        type: oci
-        image: "ghcr.io/cirruslabs/ubuntu:latest"
-      hardware:
-        ramGb: 4
-      ssh:
-        user: admin
-        password: admin
-        port: 22
-    provisioner:
-      type: script
-      config:
-        run: |
-          echo "Hello World" && sleep 10
-    healthCheck:
-      command: "true"
+[[runners]]
+name = "runner-1"
+
+[runners.vm.source]
+type = "oci"
+image = "ghcr.io/cirruslabs/ubuntu:latest"
+
+[runners.vm.hardware]
+ramGb = 4
+
+[runners.vm.ssh]
+user = "admin"
+password = "admin"
+port = 22
+
+[runners.provisioner]
+type = "script"
+
+[runners.provisioner.config]
+run = '''
+echo "Hello World" && sleep 10
+'''
+
+[runners.healthCheck]
+command = "true"
 ```
 
 ### Pre/Post run hooks
@@ -134,25 +143,29 @@ runners:
 `preRun` and `postRun` execute commands over SSH inside the VM before and after the provisioner runs. If a command exits non-zero, the run fails.
 
 ```
-runners:
-  - name: runner-1
-    vm:
-      source:
-        type: oci
-        image: "ghcr.io/cirruslabs/ubuntu:latest"
-    provisioner:
-      type: script
-      config:
-        run: echo "provision"
-    preRun: |
-      echo "before provisioner"
-    postRun: |
-      echo "after provisioner"
+[[runners]]
+name = "runner-1"
+preRun = '''
+echo "before provisioner"
+'''
+postRun = '''
+echo "after provisioner"
+'''
+
+[runners.vm.source]
+type = "oci"
+image = "ghcr.io/cirruslabs/ubuntu:latest"
+
+[runners.provisioner]
+type = "script"
+
+[runners.provisioner.config]
+run = "echo \"provision\""
 ```
 
 If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
 
-Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml)
+Full configurations keys can be found at [fixtures/sample_full_config.toml](fixtures/sample_full_config.toml)
 
 ## Acknowledgements
 

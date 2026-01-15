@@ -4,7 +4,7 @@ import Foundation
 @available(macOS 15.0, *)
 struct Destroy: ParsableCommand {
     @Option(name: .shortAndLong)
-    var config: String = "sand.yml"
+    var config: String = Config.defaultPath
     @OptionGroup
     var logLevel: LogLevelOptions
 

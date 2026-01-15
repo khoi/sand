@@ -4,54 +4,66 @@ import Testing
 
 @Test
 func parsesConfigAndExpandsPaths() throws {
-    let yaml = """
-    runners:
-      - name: runner-1
-        stopAfter: 1
-        vm:
-          source:
-            type: local
-            path: ~/vm
-          hardware:
-            ramGb: 4
-            display:
-              width: 1920
-              height: 1200
-              unit: px
-              refit: true
-          mounts:
-            - hostPath: ~/cache
-              guestFolder: cache
-              readOnly: true
-              tag: build
-          run:
-            noGraphics: false
-            noClipboard: true
-          diskSizeGb: 80
-          ssh:
-            user: admin
-            password: admin
-            port: 22
-            connectMaxRetries: 20
-        provisioner:
-          type: github
-          config:
-            appId: 42
-            organization: acme
-            repository: repo
-            privateKeyPath: ~/key.pem
-            runnerName: runner-1
-            extraLabels: [fast, arm64]
-        preRun: |
-          echo "pre-run"
-        postRun: |
-          echo "post-run"
-        healthCheck:
-          command: "pgrep -f run.sh"
-          interval: 15
-          delay: 45
+    let toml = """
+    [[runners]]
+    name = "runner-1"
+    stopAfter = 1
+    preRun = '''
+    echo "pre-run"
+    '''
+    postRun = '''
+    echo "post-run"
+    '''
+
+    [runners.vm]
+    diskSizeGb = 80
+
+    [runners.vm.source]
+    type = "local"
+    path = "~/vm"
+
+    [runners.vm.hardware]
+    ramGb = 4
+
+    [runners.vm.hardware.display]
+    width = 1920
+    height = 1200
+    unit = "px"
+    refit = true
+
+    [[runners.vm.mounts]]
+    hostPath = "~/cache"
+    guestFolder = "cache"
+    readOnly = true
+    tag = "build"
+
+    [runners.vm.run]
+    noGraphics = false
+    noClipboard = true
+
+    [runners.vm.ssh]
+    user = "admin"
+    password = "admin"
+    port = 22
+    connectMaxRetries = 20
+
+    [runners.provisioner]
+    type = "github"
+
+    [runners.provisioner.config]
+    appId = 42
+    organization = "acme"
+    repository = "repo"
+    privateKeyPath = "~/key.pem"
+    runnerName = "runner-1"
+    extraLabels = ["fast", "arm64"]
+
+    [runners.healthCheck]
+    command = "pgrep -f run.sh"
+    interval = 15
+    delay = 45
     """
-    let url = try writeTempFile(contents: yaml)
+    let url = try writeTempFile(contents: toml)
     let config = try Config.load(path: url.path)
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     #expect(config.runners.count == 1)
@@ -85,27 +97,32 @@ func parsesConfigAndExpandsPaths() throws {
 
 @Test
 func scriptProvisioner() throws {
-    let yaml = """
-    runners:
-      - name: runner-1
-        vm:
-          source:
-            type: oci
-            image: ghcr.io/acme/vm:latest
-          ssh:
-            user: runner
-            password: secret
-            port: 2222
-        provisioner:
-          type: script
-          config:
-            run: |
-              echo "Hello World"
-              sleep 1
-        healthCheck:
-          command: "true"
+    let toml = """
+    [[runners]]
+    name = "runner-1"
+
+    [runners.vm.source]
+    type = "oci"
+    image = "ghcr.io/acme/vm:latest"
+
+    [runners.vm.ssh]
+    user = "runner"
+    password = "secret"
+    port = 2222
+
+    [runners.provisioner]
+    type = "script"
+
+    [runners.provisioner.config]
+    run = '''
+    echo "Hello World"
+    sleep 1
+    '''
+
+    [runners.healthCheck]
+    command = "true"
     """
-    let url = try writeTempFile(contents: yaml)
+    let url = try writeTempFile(contents: toml)
     let config = try Config.load(path: url.path)
     #expect(config.runners.count == 1)
     #expect(config.runners.first?.vm.hardware == nil)
@@ -125,39 +142,48 @@ func scriptProvisioner() throws {
 
 @Test
 func explicitRunnersConfig() throws {
-    let yaml = """
-    runners:
-      - name: runner-a
-        vm:
-          source:
-            type: local
-            path: ~/vm-a
-          ssh:
-            user: admin
-            password: admin
-            port: 22
-        provisioner:
-          type: script
-          config:
-            run: echo "A"
-        healthCheck:
-          command: "true"
-      - name: runner-b
-        stopAfter: 2
-        vm:
-          source:
-            type: local
-            path: ~/vm-b
-          ssh:
-            user: admin
-            password: admin
-            port: 22
-        provisioner:
-          type: script
-          config:
-            run: echo "B"
+    let toml = """
+    [[runners]]
+    name = "runner-a"
+
+    [runners.vm.source]
+    type = "local"
+    path = "~/vm-a"
+
+    [runners.vm.ssh]
+    user = "admin"
+    password = "admin"
+    port = 22
+
+    [runners.provisioner]
+    type = "script"
+
+    [runners.provisioner.config]
+    run = "echo \\"A\\""
+
+    [runners.healthCheck]
+    command = "true"
+
+    [[runners]]
+    name = "runner-b"
+    stopAfter = 2
+
+    [runners.vm.source]
+    type = "local"
+    path = "~/vm-b"
+
+    [runners.vm.ssh]
+    user = "admin"
+    password = "admin"
+    port = 22
+
+    [runners.provisioner]
+    type = "script"
+
+    [runners.provisioner.config]
+    run = "echo \\"B\\""
     """
-    let url = try writeTempFile(contents: yaml)
+    let url = try writeTempFile(contents: toml)
     let config = try Config.load(path: url.path)
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     #expect(config.runners.count == 2)

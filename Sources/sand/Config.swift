@@ -1,8 +1,19 @@
 import Foundation
-import Yams
+import TOMLDecoder
+
+enum ConfigLoadError: LocalizedError {
+    case unsupportedExtension(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedExtension(let ext):
+            return "Unsupported config extension .\(ext). sand now requires TOML config files (.toml)."
+        }
+    }
+}
 
 struct Config: Decodable {
-    static let defaultPath = "sand.yml"
+    static let defaultPath = "sand.toml"
 
     struct VM: Decodable {
         let source: VMSource
@@ -285,8 +296,13 @@ struct Config: Decodable {
 
     static func load(path: String) throws -> Config {
         let expandedPath = expandPath(path)
-        let contents = try String(contentsOfFile: expandedPath, encoding: .utf8)
-        let decoder = YAMLDecoder()
+        let url = URL(fileURLWithPath: expandedPath)
+        let ext = url.pathExtension.lowercased()
+        if ext == "yml" || ext == "yaml" {
+            throw ConfigLoadError.unsupportedExtension(ext)
+        }
+        let contents = try Data(contentsOf: url)
+        let decoder = TOMLDecoder()
         let decoded = try decoder.decode(Config.self, from: contents)
         return decoded.expanded()
     }
