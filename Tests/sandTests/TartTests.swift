@@ -108,3 +108,40 @@ func preparePullsWhenMissing() throws {
         .init(executable: "tart", arguments: ["pull", "ghcr.io/cirruslabs/macos-tahoe-xcode:latest"], wait: true)
     ])
 }
+
+@Test
+func isRunningUsesJsonList() throws {
+    let runner = MockProcessRunner()
+    runner.results = [
+        ProcessResult(stdout: "[{\"Name\":\"vm-1\",\"Running\":true}]", stderr: "", exitCode: 0)
+    ]
+    let tart = makeTart(runner)
+    let running = try tart.isRunning(name: "vm-1")
+    #expect(running)
+    #expect(runner.calls == [
+        .init(executable: "tart", arguments: ["list", "--format", "json"], wait: true)
+    ])
+}
+
+@Test
+func isRunningFallsBackToTextList() throws {
+    let runner = MockProcessRunner()
+    runner.results = [
+        ProcessResult(stdout: "not-json", stderr: "", exitCode: 0),
+        ProcessResult(
+            stdout: """
+Source Name Disk Size SizeOnDisk State
+local vm-2 20 10 10 running
+""",
+            stderr: "",
+            exitCode: 0
+        )
+    ]
+    let tart = makeTart(runner)
+    let running = try tart.isRunning(name: "vm-2")
+    #expect(running)
+    #expect(runner.calls == [
+        .init(executable: "tart", arguments: ["list", "--format", "json"], wait: true),
+        .init(executable: "tart", arguments: ["list"], wait: true)
+    ])
+}

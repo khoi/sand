@@ -98,12 +98,19 @@ struct Runner: @unchecked Sendable {
         if let preRun = config.preRun {
             logger.info("run preRun")
             logScript(preRun)
-            let result = try ssh.exec(command: preRun)
-            if let result {
-                logIfNonEmpty(label: "stdout", text: result.stdout)
-                logIfNonEmpty(label: "stderr", text: result.stderr)
+            do {
+                let result = try ssh.exec(command: preRun)
+                if let result {
+                    logIfNonEmpty(label: "stdout", text: result.stdout)
+                    logIfNonEmpty(label: "stderr", text: result.stderr)
+                }
+                logger.info("preRun finished")
+            } catch {
+                if handleStageFailure(error, stage: "preRun", healthCheckState: nil) {
+                    return
+                }
+                throw error
             }
-            logger.info("preRun finished")
         }
         let healthCheckState = HealthCheckState()
         let healthCheckTask = startHealthCheck(
@@ -115,7 +122,6 @@ struct Runner: @unchecked Sendable {
         defer {
             healthCheckTask.cancel()
         }
-        var runError: Error?
         do {
             switch provisionerConfig.type {
             case .script:
@@ -148,10 +154,10 @@ struct Runner: @unchecked Sendable {
                 logger.info("github provisioner finished")
             }
         } catch {
-            if healthCheckState.failureMessage != nil {
+            if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                 return
             }
-            runError = error
+            throw error
         }
         if let postRun = config.postRun {
             logger.info("run postRun")
@@ -164,21 +170,14 @@ struct Runner: @unchecked Sendable {
                 }
                 logger.info("postRun finished")
             } catch {
-                if healthCheckState.failureMessage != nil {
+                if handleStageFailure(error, stage: "postRun", healthCheckState: healthCheckState) {
                     return
                 }
-                if runError == nil {
-                    runError = error
-                } else {
-                    logger.warning("postRun failed after provisioner error: \(String(describing: error))")
-                }
+                throw error
             }
         }
         if healthCheckState.failureMessage != nil {
             return
-        }
-        if let runError {
-            throw runError
         }
     }
 
@@ -333,6 +332,34 @@ struct Runner: @unchecked Sendable {
 
     private func logScript(_ script: String) {
         vmLogger.log(.info, "[executing]\n\(script)")
+    }
+
+    private func handleStageFailure(_ error: Error, stage: String, healthCheckState: HealthCheckState?) -> Bool {
+        if healthCheckState?.failureMessage != nil {
+            return true
+        }
+        logStageFailure(error, stage: stage)
+        guard config.stopAfter == nil else {
+            return false
+        }
+        logger.warning("\(stage) failed, restarting VM")
+        shutdownCoordinator.cleanup()
+        return true
+    }
+
+    private func logStageFailure(_ error: Error, stage: String) {
+        if let runnerError = error as? ProcessRunnerError {
+            switch runnerError {
+            case let .failed(exitCode, stdout, stderr, _):
+                logger.error("\(stage) failed with exit code \(exitCode)")
+                logIfNonEmpty(label: "stdout", text: stdout)
+                logIfNonEmpty(label: "stderr", text: stderr)
+            case .invalidCommand:
+                logger.error("\(stage) failed: invalid command")
+            }
+            return
+        }
+        logger.error("\(stage) failed: \(String(describing: error))")
     }
 }
 

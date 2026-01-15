@@ -137,12 +137,15 @@ struct Tart {
     }
 
     func isRunning(name: String) throws -> Bool {
-        let result = try run(arguments: ["list", "--running", "--quiet"], wait: true)
+        if let result = try? run(arguments: ["list", "--format", "json"], wait: true) {
+            let output = result.stdout
+            if let running = runningFromJSON(output: output, name: name) {
+                return running
+            }
+        }
+        let result = try run(arguments: ["list"], wait: true)
         let output = result?.stdout ?? ""
-        return output
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .contains(name)
+        return runningFromText(output: output, name: name)
     }
 
     private func isOCISource(_ source: String) -> Bool {
@@ -168,6 +171,46 @@ struct Tart {
             return String(source.dropFirst(prefix.count))
         }
         return source
+    }
+
+    private struct TartListEntry: Decodable {
+        let name: String
+        let running: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case name = "Name"
+            case running = "Running"
+        }
+    }
+
+    private func runningFromJSON(output: String, name: String) -> Bool? {
+        guard let data = output.data(using: .utf8) else {
+            return nil
+        }
+        guard let entries = try? JSONDecoder().decode([TartListEntry].self, from: data) else {
+            return nil
+        }
+        return entries.first(where: { $0.name == name })?.running ?? false
+    }
+
+    private func runningFromText(output: String, name: String) -> Bool {
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty || line.hasPrefix("Source ") {
+                continue
+            }
+            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            guard parts.count >= 2 else {
+                continue
+            }
+            let lineName = String(parts[1])
+            if lineName != name {
+                continue
+            }
+            let state = parts.last.map(String.init) ?? ""
+            return state == "running"
+        }
+        return false
     }
 
     private func run(arguments: [String], wait: Bool) throws -> ProcessResult? {
