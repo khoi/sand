@@ -25,6 +25,8 @@ func validConfigHasNoIssues() throws {
         name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .github, script: nil, github: github),
+        preRun: nil,
+        postRun: nil,
         stopAfter: 1,
         healthCheck: Config.HealthCheck(command: "true")
     )
@@ -52,27 +54,29 @@ func invalidConfigReportsIssues() {
         name: "runner-1",
         vm: vm,
         provisioner: Config.Provisioner(type: .script, script: .init(run: "  "), github: nil),
+        preRun: nil,
+        postRun: nil,
         stopAfter: 0,
         healthCheck: Config.HealthCheck(command: "  ", interval: 0, delay: -1)
     )
     let config = Config(runners: [runner])
     let issues = ConfigValidator().validate(config)
-    #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: stopAfter is 0; sand will exit immediately.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: Local VM path does not exist: /missing-vm.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.ramGb must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.cpuCores must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.hardware.display width/height must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.diskSizeGb must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.user must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.password must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.port must be between 1 and 65535.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.ssh.connectMaxRetries must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.command must not be empty.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.interval must be greater than 0.")))
-    #expect(issues.contains(.init(severity: .error, message: "runner runner-1: healthCheck.delay must be greater than or equal to 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .warning, message: "runner runner-1: stopAfter is 0; sand will exit immediately.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: Local VM path does not exist: /missing-vm.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.ramGb must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.cpuCores must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.display width/height must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.diskSizeGb must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.user must not be empty.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.password must not be empty.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.port must be between 1 and 65535.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.connectMaxRetries must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: healthCheck.command must not be empty.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: healthCheck.interval must be greater than 0.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: healthCheck.delay must be greater than or equal to 0.")))
 }
 
 @Test
@@ -87,10 +91,10 @@ func duplicateRunnerNamesAreRejected() {
     )
     let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
     let runners = [
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil),
-        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, stopAfter: nil, healthCheck: nil)
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, healthCheck: nil),
+        Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, healthCheck: nil)
     ]
     let config = Config(runners: runners)
     let issues = ConfigValidator().validate(config)
-    #expect(issues.contains(.init(severity: .error, message: "runner name must be unique: same.")))
+    #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner name must be unique: same.")))
 }

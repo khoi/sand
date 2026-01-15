@@ -42,6 +42,12 @@ final class ConfigValidator {
                 ))
             }
             var runnerIssues: [ConfigValidationIssue] = []
+            if let preRun = runner.preRun, preRun.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                runnerIssues.append(.init(severity: .error, message: "preRun must not be empty when provided."))
+            }
+            if let postRun = runner.postRun, postRun.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                runnerIssues.append(.init(severity: .error, message: "postRun must not be empty when provided."))
+            }
             validateVM(runner.vm, issues: &runnerIssues)
             validateProvisioner(runner.provisioner, issues: &runnerIssues)
             if let healthCheck = runner.healthCheck {

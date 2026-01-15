@@ -42,6 +42,10 @@ func parsesConfigAndExpandsPaths() throws {
             privateKeyPath: ~/key.pem
             runnerName: runner-1
             extraLabels: [fast, arm64]
+        preRun: |
+          echo "pre-run"
+        postRun: |
+          echo "post-run"
         healthCheck:
           command: "pgrep -f run.sh"
           interval: 15
@@ -72,6 +76,8 @@ func parsesConfigAndExpandsPaths() throws {
     #expect(config.runners.first?.provisioner.github?.repository == "repo")
     #expect(config.runners.first?.provisioner.github?.extraLabels ?? [] == ["fast", "arm64"])
     #expect(config.runners.first?.provisioner.github?.privateKeyPath.hasPrefix(home) ?? false)
+    #expect(config.runners.first?.preRun?.contains("pre-run") == true)
+    #expect(config.runners.first?.postRun?.contains("post-run") == true)
     #expect(config.runners.first?.healthCheck?.command == "pgrep -f run.sh")
     #expect(config.runners.first?.healthCheck?.interval == 15)
     #expect(config.runners.first?.healthCheck?.delay == 45)

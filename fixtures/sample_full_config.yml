@@ -34,6 +34,10 @@ runners:
       config:
         run: |
           echo "Hello World from runner 1"
+    preRun: |
+      echo "pre-run for runner 1"
+    postRun: |
+      echo "post-run for runner 1"
     healthCheck:
       command: "true"
       interval: 30
