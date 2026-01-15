@@ -95,6 +95,16 @@ struct Runner: @unchecked Sendable {
         guard await waitForSSH(ssh: ssh) else {
             return
         }
+        if let preRun = config.preRun {
+            logger.info("run preRun")
+            logScript(preRun)
+            let result = try ssh.exec(command: preRun)
+            if let result {
+                logIfNonEmpty(label: "stdout", text: result.stdout)
+                logIfNonEmpty(label: "stderr", text: result.stderr)
+            }
+            logger.info("preRun finished")
+        }
         let healthCheckState = HealthCheckState()
         let healthCheckTask = startHealthCheck(
             healthCheck: config.healthCheck ?? .standard,
@@ -105,6 +115,7 @@ struct Runner: @unchecked Sendable {
         defer {
             healthCheckTask.cancel()
         }
+        var runError: Error?
         do {
             switch provisionerConfig.type {
             case .script:
@@ -140,10 +151,34 @@ struct Runner: @unchecked Sendable {
             if healthCheckState.failureMessage != nil {
                 return
             }
-            throw error
+            runError = error
+        }
+        if let postRun = config.postRun {
+            logger.info("run postRun")
+            logScript(postRun)
+            do {
+                let result = try ssh.exec(command: postRun)
+                if let result {
+                    logIfNonEmpty(label: "stdout", text: result.stdout)
+                    logIfNonEmpty(label: "stderr", text: result.stderr)
+                }
+                logger.info("postRun finished")
+            } catch {
+                if healthCheckState.failureMessage != nil {
+                    return
+                }
+                if runError == nil {
+                    runError = error
+                } else {
+                    logger.warning("postRun failed after provisioner error: \(String(describing: error))")
+                }
+            }
         }
         if healthCheckState.failureMessage != nil {
             return
+        }
+        if let runError {
+            throw runError
         }
     }
 

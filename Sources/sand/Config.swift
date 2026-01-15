@@ -271,6 +271,8 @@ struct Config: Decodable {
         let name: String
         let vm: VM
         let provisioner: Provisioner
+        let preRun: String?
+        let postRun: String?
         let stopAfter: Int?
         let healthCheck: HealthCheck?
     }
@@ -295,6 +297,8 @@ struct Config: Decodable {
                 name: runner.name,
                 vm: expandVM(runner.vm),
                 provisioner: runner.provisioner.expanded(),
+                preRun: runner.preRun,
+                postRun: runner.postRun,
                 stopAfter: runner.stopAfter,
                 healthCheck: runner.healthCheck
             )
