@@ -137,15 +137,12 @@ struct Tart {
     }
 
     func isRunning(name: String) throws -> Bool {
-        if let result = try? run(arguments: ["list", "--format", "json"], wait: true) {
-            let output = result.stdout
-            if let running = runningFromJSON(output: output, name: name) {
-                return running
-            }
-        }
-        let result = try run(arguments: ["list"], wait: true)
+        let result = try run(arguments: ["list", "--format", "json"], wait: true)
         let output = result?.stdout ?? ""
-        return runningFromText(output: output, name: name)
+        guard let running = runningFromJSON(output: output, name: name) else {
+            return false
+        }
+        return running
     }
 
     private func isOCISource(_ source: String) -> Bool {
@@ -193,25 +190,6 @@ struct Tart {
         return entries.first(where: { $0.name == name })?.running ?? false
     }
 
-    private func runningFromText(output: String, name: String) -> Bool {
-        for rawLine in output.split(whereSeparator: \.isNewline) {
-            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.isEmpty || line.hasPrefix("Source ") {
-                continue
-            }
-            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
-            guard parts.count >= 2 else {
-                continue
-            }
-            let lineName = String(parts[1])
-            if lineName != name {
-                continue
-            }
-            let state = parts.last.map(String.init) ?? ""
-            return state == "running"
-        }
-        return false
-    }
 
     private func run(arguments: [String], wait: Bool) throws -> ProcessResult? {
         logger.debug("tart \(arguments.joined(separator: " "))")
