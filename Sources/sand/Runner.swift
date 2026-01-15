@@ -115,6 +115,7 @@ struct Runner: @unchecked Sendable {
         let healthCheckState = HealthCheckState()
         let healthCheckTask = startHealthCheck(
             healthCheck: config.healthCheck ?? .standard,
+            vmName: name,
             ip: ip,
             ssh: vm.ssh,
             state: healthCheckState
@@ -213,6 +214,15 @@ struct Runner: @unchecked Sendable {
             }
             attempt += 1
             do {
+                let running = try tart.isRunning(name: vmName)
+                if !running {
+                    logger.warning("VM \(vmName) not running while waiting for SSH, restarting VM")
+                    return false
+                }
+            } catch {
+                logger.warning("Failed to check VM \(vmName) running state: \(String(describing: error))")
+            }
+            do {
                 try ssh.checkConnection()
                 return true
             } catch {
@@ -247,6 +257,7 @@ struct Runner: @unchecked Sendable {
 
     private func startHealthCheck(
         healthCheck: Config.HealthCheck,
+        vmName: String,
         ip: String,
         ssh: Config.SSH,
         state: HealthCheckState
@@ -265,6 +276,17 @@ struct Runner: @unchecked Sendable {
             }
             logger.info("healthCheck active (interval: \(healthCheck.interval)s)")
             while !Task.isCancelled {
+                do {
+                    let running = try tart.isRunning(name: vmName)
+                    if !running {
+                        logger.warning("VM \(vmName) not running, restarting VM")
+                        state.markFailed(message: "vm not running")
+                        shutdownCoordinator.cleanup()
+                        return
+                    }
+                } catch {
+                    logger.warning("Failed to check VM \(vmName) running state: \(String(describing: error))")
+                }
                 do {
                     let probe = SSHClient(processRunner: tart.processRunner, host: ip, config: ssh)
                     let probeCommand = wrapHealthCheckCommand(healthCheck.command)
