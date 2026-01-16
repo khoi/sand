@@ -37,7 +37,7 @@ To make sand run on boot, u can leverage launchctl as an option
   <string>io.khoi.sand</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/yourname/.local/bin/sand</string>
+    <string>/opt/homebrew/bin/sand</string>
     <string>run</string>
     <string>--config</string>
     <string>/Users/yourname/sand.yml</string>
