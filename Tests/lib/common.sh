@@ -110,8 +110,10 @@ output = subprocess.check_output(["tart", "list", "--format", "json"], text=True
 for entry in json.loads(output):
     if entry.get("Name") == name:
         running = entry.get("Running")
-        state = entry.get("State")
-        print("present", str(running).lower(), state or "")
+        if running is True:
+            print("running")
+        else:
+            print("stopped")
         raise SystemExit(0)
 print("missing")
 PY
@@ -145,11 +147,9 @@ wait_for_vm_running() {
   while true; do
     local state
     state=$(tart_vm_state "$name")
-    case "$state" in
-      present\ true*)
-        return 0
-        ;;
-    esac
+    if [ "$state" = "running" ]; then
+      return 0
+    fi
     local now
     now=$(date +%s)
     if [ $((now - start)) -ge "$timeout" ]; then
@@ -164,19 +164,19 @@ wait_for_vm_restarted() {
   local timeout="$2"
   local start
   start=$(date +%s)
-  local seen_running=0
+  local seen_running=1
   local seen_missing=0
   while true; do
     local state
     state=$(tart_vm_state "$name")
     case "$state" in
-      present\ true*)
+      running)
         if [ "$seen_missing" -eq 1 ]; then
           return 0
         fi
         seen_running=1
         ;;
-      present\ false*|missing)
+      stopped|missing)
         if [ "$seen_running" -eq 1 ]; then
           seen_missing=1
         fi

@@ -31,3 +31,4 @@ You can customize the run with the following variables:
 - These tests are intended for local verification only (no CI).
 - Each test uses a unique runner name to avoid interfering with existing sand services.
 - Some cases intentionally stop VMs, trigger restarts, or send signals to the `sand` process.
+- Some cases write logs to a file using `--log-file` or the `SAND_LOG_FILE` environment variable.

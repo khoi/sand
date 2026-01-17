@@ -67,7 +67,7 @@ ssh_exec "$ip" "rm -f /tmp/e2e_health_ok" >/dev/null 2>&1 || true
 start=$(date +%s)
 while true; do
   state=$(tart_vm_state "$runner")
-  if [[ "$state" == present\ true* ]]; then
+  if [ "$state" = "running" ]; then
     ip=$(tart ip "$runner" --wait 5 2>/dev/null || true)
     if [ -n "$ip" ]; then
       new_boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
