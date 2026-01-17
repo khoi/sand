@@ -80,12 +80,12 @@ struct Runner: @unchecked Sendable {
         }
         try applyVMConfigIfNeeded(name: name, vm: vm)
         let runnerCacheDirectory = prepareRunnerCacheDirectory(for: config)
-        let directoryMounts = vm.mounts.map {
+        let directoryMounts = vm.mounts.map { mount in
             Tart.DirectoryMount(
-                hostPath: $0.hostPath,
-                guestFolder: $0.guestFolder,
-                readOnly: $0.readOnly,
-                tag: $0.tag
+                hostPath: mount.hostPath,
+                guestFolder: mount.guestFolder,
+                readOnly: mount.readOnly,
+                tag: resolvedMountTag(for: mount)
             )
         }
         let runOptions = Tart.RunOptions(
@@ -602,6 +602,13 @@ struct Runner: @unchecked Sendable {
                 logger.info(trimmed)
             }
         }
+    }
+
+    private func resolvedMountTag(for mount: Config.DirectoryMount) -> String? {
+        if mount.tag == GitHubProvisioner.runnerCacheMountTag {
+            return nil
+        }
+        return mount.tag
     }
 
     private func logScript(_ script: String) {
