@@ -307,6 +307,9 @@ struct Runner: @unchecked Sendable {
                 return
             }
             logger.info("healthCheck active (interval: \(healthCheck.interval)s)")
+            let activationTime = Date()
+            var sawSuccess = false
+            let startupGrace = max(healthCheck.interval, 10)
             while !Task.isCancelled {
                 do {
                     let status = try tart.status(name: vmName)
@@ -338,13 +341,20 @@ struct Runner: @unchecked Sendable {
                     let result = try probe.exec(command: probeCommand)
                     let output = result?.stdout ?? ""
                     let exitCode = parseHealthCheckExitCode(output: output) ?? 1
-                    guard exitCode == 0 else {
+                    if exitCode == 0 {
+                        sawSuccess = true
+                    } else {
                         let message = "exit code \(exitCode)"
-                        logger.warning("healthCheck failed with \(message), restarting VM")
-                        state.markFailed(message: message)
-                        control.terminateProvisioning()
-                        shutdownCoordinator.cleanup()
-                        return
+                        let inStartupGrace = !sawSuccess && Date().timeIntervalSince(activationTime) < startupGrace
+                        if inStartupGrace {
+                            logger.warning("healthCheck failed with \(message) during startup grace, retrying")
+                        } else {
+                            logger.warning("healthCheck failed with \(message), restarting VM")
+                            state.markFailed(message: message)
+                            control.terminateProvisioning()
+                            shutdownCoordinator.cleanup()
+                            return
+                        }
                     }
                 } catch {
                     logger.warning("healthCheck error (will retry): \(String(describing: error))")
