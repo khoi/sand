@@ -48,6 +48,7 @@ cleanup_dir() {
 init_defaults() {
   export SAND_E2E_IMAGE="${SAND_E2E_IMAGE:-ghcr.io/cirruslabs/ubuntu:latest}"
   export SAND_E2E_TIMEOUT_SEC="${SAND_E2E_TIMEOUT_SEC:-900}"
+  export SAND_E2E_IP_WAIT_SEC="${SAND_E2E_IP_WAIT_SEC:-180}"
   export SAND_E2E_SSH_USER="${SAND_E2E_SSH_USER:-admin}"
   export SAND_E2E_SSH_PASSWORD="${SAND_E2E_SSH_PASSWORD:-admin}"
   export SAND_E2E_SSH_PORT="${SAND_E2E_SSH_PORT:-22}"
@@ -144,15 +145,49 @@ wait_for_vm_running() {
   while true; do
     local state
     state=$(tart_vm_state "$name")
-    if [ "$state" = "present true running" ]; then
-      return 0
-    fi
+    case "$state" in
+      present\ true*)
+        return 0
+        ;;
+    esac
     local now
     now=$(date +%s)
     if [ $((now - start)) -ge "$timeout" ]; then
       fail "timed out waiting for VM $name to be running"
     fi
     sleep 5
+  done
+}
+
+wait_for_vm_restarted() {
+  local name="$1"
+  local timeout="$2"
+  local start
+  start=$(date +%s)
+  local seen_running=0
+  local seen_missing=0
+  while true; do
+    local state
+    state=$(tart_vm_state "$name")
+    case "$state" in
+      present\ true*)
+        if [ "$seen_missing" -eq 1 ]; then
+          return 0
+        fi
+        seen_running=1
+        ;;
+      missing)
+        if [ "$seen_running" -eq 1 ]; then
+          seen_missing=1
+        fi
+        ;;
+    esac
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      fail "timed out waiting for VM $name to restart"
+    fi
+    sleep 1
   done
 }
 
@@ -176,4 +211,87 @@ run_with_timeout() {
     sleep 2
   done
   wait "$pid"
+}
+
+vm_ip() {
+  local name="$1"
+  tart ip "$name" --wait "$SAND_E2E_IP_WAIT_SEC"
+}
+
+ssh_exec() {
+  local ip="$1"
+  shift
+  sshpass -p "$SAND_E2E_SSH_PASSWORD" ssh \
+    -o ConnectTimeout=5 \
+    -o LogLevel=ERROR \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -p "$SAND_E2E_SSH_PORT" \
+    "${SAND_E2E_SSH_USER}@${ip}" \
+    "$@"
+}
+
+wait_for_vm_file() {
+  local ip="$1"
+  local path="$2"
+  local timeout="$3"
+  local start
+  start=$(date +%s)
+  while true; do
+    if ssh_exec "$ip" "test -f $path" >/dev/null 2>&1; then
+      return 0
+    fi
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      fail "timed out waiting for $path on $ip"
+    fi
+    sleep 2
+  done
+}
+
+start_sand_run() {
+  local config="$1"
+  local log="$2"
+  shift 2
+  : >"$log"
+  "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
+  echo $!
+}
+
+wait_for_process_exit() {
+  local pid="$1"
+  local timeout="$2"
+  local start
+  start=$(date +%s)
+  while kill -0 "$pid" >/dev/null 2>&1; do
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      fail "timed out waiting for process $pid to exit"
+    fi
+    sleep 1
+  done
+  wait "$pid" >/dev/null 2>&1 || true
+}
+
+stop_process() {
+  local pid="$1"
+  local signal="${2:-TERM}"
+  local timeout="${3:-20}"
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    kill "-$signal" "$pid" >/dev/null 2>&1 || true
+  fi
+  local start
+  start=$(date +%s)
+  while kill -0 "$pid" >/dev/null 2>&1; do
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+      break
+    fi
+    sleep 1
+  done
+  wait "$pid" >/dev/null 2>&1 || true
 }
