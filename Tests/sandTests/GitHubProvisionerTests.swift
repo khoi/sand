@@ -11,13 +11,15 @@ func scriptWithExtraLabels() {
         repository: "repo",
         privateKeyPath: "/tmp/key.pem",
         runnerName: "runner-1",
-        extraLabels: ["fast", "arm64"]
+        extraLabels: ["fast", "arm64"],
+        runnerCache: nil
     )
     let script = provisioner.script(config: config, runnerToken: "token")
     let joined = script.joined(separator: "\n")
     #expect(joined.contains("--labels sand,fast,arm64"))
     #expect(joined.contains("--url https://github.com/org/repo"))
     #expect(joined.contains("actions/runner/releases/download"))
+    #expect(!joined.contains("runner cache"))
 }
 
 @Test
@@ -29,11 +31,34 @@ func scriptWithDefaultLabels() {
         repository: nil,
         privateKeyPath: "/tmp/key.pem",
         runnerName: "runner-1",
-        extraLabels: nil
+        extraLabels: nil,
+        runnerCache: nil
     )
     let script = provisioner.script(config: config, runnerToken: "token")
     let joined = script.joined(separator: "\n")
     #expect(joined.contains("--labels sand"))
     #expect(joined.contains("--url https://github.com/org"))
     #expect(joined.contains("actions-runner-${runner_os}-${runner_arch}"))
+    #expect(!joined.contains("runner cache"))
+}
+
+@Test
+func scriptIncludesRunnerCacheLogic() {
+    let provisioner = GitHubProvisioner()
+    let cache = GitHubRunnerCache(hostPath: "/tmp/cache", guestFolder: "sand-cache", readOnly: true)
+    let config = GitHubProvisionerConfig(
+        appId: 1,
+        organization: "org",
+        repository: "repo",
+        privateKeyPath: "/tmp/key.pem",
+        runnerName: "runner-1",
+        extraLabels: nil,
+        runnerCache: cache
+    )
+    let script = provisioner.script(config: config, runnerToken: "token")
+    let joined = script.joined(separator: "\n")
+    #expect(joined.contains("runner cache hit"))
+    #expect(joined.contains("runner cache miss"))
+    #expect(joined.contains("cache_dir="))
+    #expect(joined.contains("cache_file="))
 }

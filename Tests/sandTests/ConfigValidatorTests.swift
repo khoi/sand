@@ -19,7 +19,8 @@ func validConfigHasNoIssues() throws {
         repository: nil,
         privateKeyPath: keyURL.path,
         runnerName: "runner-1",
-        extraLabels: nil
+        extraLabels: nil,
+        runnerCache: nil
     )
     let runner = Config.RunnerConfig(
         name: "runner-1",
@@ -97,4 +98,86 @@ func duplicateRunnerNamesAreRejected() {
     let config = Config(runners: runners)
     let issues = ConfigValidator().validate(config)
     #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner name must be unique: same.")))
+}
+
+@Test
+func runnerCacheValidationReportsIssues() throws {
+    let keyURL = try writeTempFile(contents: "key", suffix: ".pem")
+    let cacheFile = try writeTempFile(contents: "not-a-directory")
+    let vm = Config.VM(
+        source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+        hardware: nil,
+        mounts: [],
+        run: .default,
+        diskSizeGb: nil,
+        ssh: .standard
+    )
+    let runnerCache = GitHubRunnerCache(hostPath: cacheFile.path, guestFolder: " ", readOnly: false)
+    let github = GitHubProvisionerConfig(
+        appId: 1,
+        organization: "acme",
+        repository: nil,
+        privateKeyPath: keyURL.path,
+        runnerName: "runner-1",
+        extraLabels: nil,
+        runnerCache: runnerCache
+    )
+    let runner = Config.RunnerConfig(
+        name: "runner-1",
+        vm: vm,
+        provisioner: Config.Provisioner(type: .github, script: nil, github: github),
+        preRun: nil,
+        postRun: nil,
+        stopAfter: 1,
+        healthCheck: nil
+    )
+    let config = Config(runners: [runner])
+    let issues = ConfigValidator().validate(config)
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .error,
+        message: "runner runner-1: provisioner.config.runnerCache.hostPath must be a directory: \(cacheFile.path)."
+    )))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .error,
+        message: "runner runner-1: provisioner.config.runnerCache.guestFolder must not be empty."
+    )))
+}
+
+@Test
+func runnerCacheMountConflictWarns() throws {
+    let keyURL = try writeTempFile(contents: "key", suffix: ".pem")
+    let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+    let vm = Config.VM(
+        source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+        hardware: nil,
+        mounts: [Config.DirectoryMount(hostPath: cacheDir.path, guestFolder: "cache", readOnly: false, tag: nil)],
+        run: .default,
+        diskSizeGb: nil,
+        ssh: .standard
+    )
+    let runnerCache = GitHubRunnerCache(hostPath: cacheDir.path, guestFolder: "cache", readOnly: false)
+    let github = GitHubProvisionerConfig(
+        appId: 1,
+        organization: "acme",
+        repository: nil,
+        privateKeyPath: keyURL.path,
+        runnerName: "runner-1",
+        extraLabels: nil,
+        runnerCache: runnerCache
+    )
+    let runner = Config.RunnerConfig(
+        name: "runner-1",
+        vm: vm,
+        provisioner: Config.Provisioner(type: .github, script: nil, github: github),
+        preRun: nil,
+        postRun: nil,
+        stopAfter: 1,
+        healthCheck: nil
+    )
+    let issues = ConfigValidator().validate(Config(runners: [runner]))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .warning,
+        message: "runner runner-1: vm.mounts already includes guestFolder cache; runnerCache auto-mount will be skipped."
+    )))
 }

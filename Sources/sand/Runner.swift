@@ -79,15 +79,19 @@ struct Runner: @unchecked Sendable {
             shutdownCoordinator.cleanup()
         }
         try applyVMConfigIfNeeded(name: name, vm: vm)
+        var directoryMounts = vm.mounts.map {
+            Tart.DirectoryMount(
+                hostPath: $0.hostPath,
+                guestFolder: $0.guestFolder,
+                readOnly: $0.readOnly,
+                tag: $0.tag
+            )
+        }
+        if let cacheMount = runnerCacheMount(for: config) {
+            directoryMounts.append(cacheMount)
+        }
         let runOptions = Tart.RunOptions(
-            directoryMounts: vm.mounts.map {
-                Tart.DirectoryMount(
-                    hostPath: $0.hostPath,
-                    guestFolder: $0.guestFolder,
-                    readOnly: $0.readOnly,
-                    tag: $0.tag
-                )
-            },
+            directoryMounts: directoryMounts,
             noAudio: vm.hardware?.audio == false,
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard
@@ -222,6 +226,48 @@ struct Runner: @unchecked Sendable {
             display: display,
             displayRefit: displayRefit,
             diskSizeGb: diskSizeGb
+        )
+    }
+
+    private func runnerCacheMount(for config: Config.RunnerConfig) -> Tart.DirectoryMount? {
+        guard config.provisioner.type == .github,
+              let githubConfig = config.provisioner.github,
+              let runnerCache = githubConfig.runnerCache else {
+            return nil
+        }
+        let guestFolder = runnerCache.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        if guestFolder.isEmpty {
+            return nil
+        }
+        if config.vm.mounts.contains(where: { $0.guestFolder == guestFolder }) {
+            logger.warning("runnerCache guestFolder \(guestFolder) already mounted; skipping auto-mount")
+            return nil
+        }
+        let hostPath = runnerCache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hostPath.isEmpty {
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory) {
+            if !isDirectory.boolValue {
+                logger.warning("runnerCache hostPath exists but is not a directory: \(hostPath)")
+                return nil
+            }
+        } else {
+            do {
+                try fileManager.createDirectory(atPath: hostPath, withIntermediateDirectories: true)
+            } catch {
+                logger.warning("runnerCache hostPath could not be created at \(hostPath): \(String(describing: error))")
+                return nil
+            }
+        }
+        logger.info("runner cache enabled: \(hostPath) -> \(guestFolder)")
+        return Tart.DirectoryMount(
+            hostPath: hostPath,
+            guestFolder: guestFolder,
+            readOnly: runnerCache.readOnly,
+            tag: nil
         )
     }
 

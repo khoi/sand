@@ -63,6 +63,10 @@ runners:
         privateKeyPath: ~/my-app.private-key.pem
         runnerName: runner-2
         extraLabels: null
+        runnerCache:
+          hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
     healthCheck:
       command: "pgrep -fl /Users/admin/actions-runner/run.sh"
       interval: 30

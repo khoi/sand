@@ -360,13 +360,21 @@ extension Config.Provisioner {
             guard let github else {
                 return self
             }
+            let expandedRunnerCache = github.runnerCache.map { cache in
+                GitHubRunnerCache(
+                    hostPath: Config.expandPath(cache.hostPath),
+                    guestFolder: cache.guestFolder,
+                    readOnly: cache.readOnly
+                )
+            }
             let expanded = GitHubProvisionerConfig(
                 appId: github.appId,
                 organization: github.organization,
                 repository: github.repository,
                 privateKeyPath: Config.expandPath(github.privateKeyPath),
                 runnerName: github.runnerName,
-                extraLabels: github.extraLabels
+                extraLabels: github.extraLabels,
+                runnerCache: expandedRunnerCache
             )
             return Config.Provisioner(type: type, script: nil, github: expanded)
         }
