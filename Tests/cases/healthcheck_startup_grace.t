@@ -55,7 +55,14 @@ wait_for_vm_running "$runner" 180
 ip=$(vm_ip "$runner")
 
 wait_for_vm_file "$ip" /tmp/e2e_boot_id 60
-boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+boot_id=""
+for _ in 1 2 3 4 5; do
+  boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+  if [ -n "$boot_id" ]; then
+    break
+  fi
+  sleep 2
+done
 if [ -z "$boot_id" ]; then
   fail "failed to read initial boot id"
 fi
@@ -63,7 +70,14 @@ fi
 wait_for_vm_file "$ip" /tmp/e2e_health_ok 60
 sleep 8
 
-boot_id_after=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+boot_id_after=""
+for _ in 1 2 3 4 5; do
+  boot_id_after=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+  if [ -n "$boot_id_after" ]; then
+    break
+  fi
+  sleep 2
+done
 if [ -z "$boot_id_after" ]; then
   fail "failed to read boot id after healthcheck"
 fi
@@ -72,4 +86,5 @@ if [ "$boot_id_after" != "$boot_id" ]; then
 fi
 
 stop_process "$sand_pid" TERM 20
+"$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
 wait_for_vm_absent "$runner" 180
