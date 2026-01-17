@@ -133,8 +133,12 @@ struct Tart {
         return value
     }
 
-    func stop(name: String) throws {
-        _ = try run(arguments: ["stop", name], wait: true)
+    func stop(name: String, timeout: Int? = nil) throws {
+        var arguments = ["stop", name]
+        if let timeout {
+            arguments.append(contentsOf: ["--timeout", String(timeout)])
+        }
+        _ = try run(arguments: arguments, wait: true)
     }
 
     func delete(name: String) throws {

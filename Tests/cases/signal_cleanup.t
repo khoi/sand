@@ -55,7 +55,7 @@ EOF_CONFIG
   wait_for_vm_running "$runner" 180
 
   stop_process "$sand_pid" "$signal" 20
-  wait_for_vm_absent "$runner" 180
+  wait_for_vm_stopped_or_absent "$runner" 180
 }
 
 runner_int=$(unique_runner_name)

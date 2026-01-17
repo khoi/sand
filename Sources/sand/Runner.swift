@@ -453,6 +453,7 @@ struct Runner: @unchecked Sendable {
             case let .completed(result):
                 logIfNonEmpty(label: "stdout", text: result.stdout)
                 logIfNonEmpty(label: "stderr", text: result.stderr)
+                logCacheStatusIfPresent(output: result.stdout)
                 return .completed(result)
             case let .failed(error):
                 return .failed(error)
@@ -560,6 +561,26 @@ struct Runner: @unchecked Sendable {
             return
         }
         logLines(logger: vmLogger, "[\(label)] \(text)", level: .info)
+    }
+
+    private func logCacheStatusIfPresent(output: String) {
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let prefixes = [
+            "runner cache hit:",
+            "runner cache miss:",
+            "runner cache populated:"
+        ]
+        for line in output.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                continue
+            }
+            if prefixes.contains(where: { trimmed.hasPrefix($0) }) {
+                logger.info(trimmed)
+            }
+        }
     }
 
     private func logScript(_ script: String) {

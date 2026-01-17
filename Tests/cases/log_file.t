@@ -10,6 +10,8 @@ workdir=$(mktemp_dir)
 runner=$(unique_runner_name)
 config="$workdir/config.yml"
 log="$workdir/sand.log"
+export SAND_E2E_CONFIG="$config"
+export SAND_E2E_LOG="$log"
 
 cat >"$config" <<EOF_CONFIG
 runners:

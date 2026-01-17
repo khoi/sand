@@ -64,24 +64,17 @@ fi
 
 ssh_exec "$ip" "rm -f /tmp/e2e_health_ok" >/dev/null 2>&1 || true
 
-start=$(date +%s)
-while true; do
-  state=$(tart_vm_state "$runner")
-  if [ "$state" = "running" ]; then
-    ip=$(tart ip "$runner" --wait 5 2>/dev/null || true)
-    if [ -n "$ip" ]; then
-      new_boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
-      if [ -n "$new_boot_id" ] && [ "$new_boot_id" != "$boot_id" ]; then
-        break
-      fi
-    fi
-  fi
-  now=$(date +%s)
-  if [ $((now - start)) -ge 180 ]; then
-    fail "timed out waiting for VM to restart"
-  fi
-  sleep 2
-done
+wait_for_vm_restarted "$runner" 180
+wait_for_vm_running "$runner" 180
+ip=$(vm_ip "$runner")
+wait_for_vm_file "$ip" /tmp/e2e_boot_id 60
+new_boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+if [ -z "$new_boot_id" ]; then
+  fail "failed to read boot id after restart"
+fi
+if [ "$new_boot_id" = "$boot_id" ]; then
+  fail "VM boot id did not change after restart"
+fi
 
 stop_process "$sand_pid" TERM 20
 wait_for_vm_stopped_or_absent "$runner" 180

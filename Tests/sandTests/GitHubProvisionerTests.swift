@@ -58,3 +58,20 @@ func scriptIncludesRunnerCacheLogic() {
     #expect(joined.contains("cache_dir="))
     #expect(joined.contains("cache_file="))
 }
+
+@Test
+func scriptUsesRunnerCacheDirectoryValue() {
+    let provisioner = GitHubProvisioner()
+    let config = GitHubProvisionerConfig(
+        appId: 1,
+        organization: "org",
+        repository: "repo",
+        privateKeyPath: "/tmp/key.pem",
+        runnerName: "runner-1",
+        extraLabels: nil
+    )
+    let cacheDirectory = "/var/tmp/runner-cache"
+    let script = provisioner.script(config: config, runnerToken: "token", cacheDirectory: cacheDirectory)
+    let joined = script.joined(separator: "\n")
+    #expect(joined.contains("cache_dir=\"\(cacheDirectory)\""))
+}

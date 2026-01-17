@@ -53,4 +53,4 @@ wait_for_vm_running "$runner" 180
 wait_for_vm_restarted "$runner" 180
 
 stop_process "$sand_pid" TERM 20
-wait_for_vm_absent "$runner" 180
+wait_for_vm_stopped_or_absent "$runner" 180

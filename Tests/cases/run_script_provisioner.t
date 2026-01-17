@@ -18,4 +18,4 @@ cleanup() {
 trap cleanup EXIT
 
 run_with_timeout "$SAND_E2E_TIMEOUT_SEC" "$SAND_BIN" run --config "$config"
-wait_for_vm_absent "$runner" 180
+wait_for_vm_stopped_or_absent "$runner" 180

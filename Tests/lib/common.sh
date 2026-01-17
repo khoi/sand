@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
+  e2e_diagnostics
   exit 1
 }
 
@@ -45,6 +46,28 @@ cleanup_dir() {
   rm -rf "$dir"
 }
 
+e2e_diagnostics() {
+  if [ "${SAND_E2E_DIAG:-1}" = "0" ]; then
+    return 0
+  fi
+  set +e
+  printf '\n---- e2e diagnostics ----\n' >&2
+  if command -v tart >/dev/null 2>&1; then
+    printf '[tart list]\n' >&2
+    tart list --format json >&2
+  fi
+  if [ -n "${SAND_E2E_LOG:-}" ] && [ -f "$SAND_E2E_LOG" ]; then
+    printf '[sand log tail]\n' >&2
+    tail -n 200 "$SAND_E2E_LOG" >&2
+  fi
+  if [ -n "${SAND_E2E_CONFIG:-}" ] && [ -f "$SAND_E2E_CONFIG" ]; then
+    printf '[config]\n' >&2
+    cat "$SAND_E2E_CONFIG" >&2
+  fi
+  printf '---- end diagnostics ----\n' >&2
+  set -e
+}
+
 init_defaults() {
   export SAND_E2E_IMAGE="${SAND_E2E_IMAGE:-ghcr.io/cirruslabs/ubuntu:latest}"
   export SAND_E2E_TIMEOUT_SEC="${SAND_E2E_TIMEOUT_SEC:-900}"
@@ -72,6 +95,7 @@ unique_runner_name() {
 write_config() {
   local path="$1"
   local runner_name="$2"
+  export SAND_E2E_CONFIG="$path"
   cat >"$path" <<EOF_CONFIG
 runners:
   - name: ${runner_name}
@@ -274,6 +298,8 @@ start_sand_run() {
   local config="$1"
   local log="$2"
   shift 2
+  export SAND_E2E_CONFIG="$config"
+  export SAND_E2E_LOG="$log"
   : >"$log"
   "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
   echo $!
