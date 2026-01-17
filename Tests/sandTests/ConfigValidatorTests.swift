@@ -98,3 +98,48 @@ func duplicateRunnerNamesAreRejected() {
     let issues = ConfigValidator().validate(config)
     #expect(issues.contains(ConfigValidationIssue(severity: .error, message: "runner name must be unique: same.")))
 }
+
+@Test
+func runnerCacheMountTagValidation() throws {
+    let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+    let cacheFile = try writeTempFile(contents: "not-a-directory")
+    let vm = Config.VM(
+        source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+        hardware: nil,
+        mounts: [
+            Config.DirectoryMount(hostPath: cacheDir.path, guestFolder: "cache", readOnly: true, tag: "actions-runner-cache"),
+            Config.DirectoryMount(hostPath: cacheDir.path, guestFolder: "cache-2", readOnly: false, tag: "actions-runner-cache"),
+            Config.DirectoryMount(hostPath: cacheFile.path, guestFolder: "cache-3", readOnly: false, tag: "actions-runner-cache")
+        ],
+        run: .default,
+        diskSizeGb: nil,
+        ssh: .standard
+    )
+    let runner = Config.RunnerConfig(
+        name: "runner-1",
+        vm: vm,
+        provisioner: Config.Provisioner(type: .script, script: .init(run: "echo ok"), github: nil),
+        preRun: nil,
+        postRun: nil,
+        stopAfter: nil,
+        healthCheck: nil
+    )
+    let issues = ConfigValidator().validate(Config(runners: [runner]))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .warning,
+        message: "runner runner-1: vm.mounts tag actions-runner-cache is set but provisioner is not github; cache mount will be ignored."
+    )))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .warning,
+        message: "runner runner-1: multiple vm.mounts entries tagged actions-runner-cache; only the first will be used."
+    )))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .warning,
+        message: "runner runner-1: vm.mounts tagged actions-runner-cache is readOnly; cache will not be populated on misses."
+    )))
+    #expect(issues.contains(ConfigValidationIssue(
+        severity: .error,
+        message: "runner runner-1: vm.mounts hostPath for actions-runner-cache must be a directory: \(cacheFile.path)."
+    )))
+}

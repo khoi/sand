@@ -53,6 +53,7 @@ final class ConfigValidator {
             if let healthCheck = runner.healthCheck {
                 validateHealthCheck(healthCheck, issues: &runnerIssues)
             }
+            validateRunnerCacheMounts(runner, issues: &runnerIssues)
             issues.append(contentsOf: runnerIssues.map {
                 ConfigValidationIssue(
                     severity: $0.severity,
@@ -160,6 +161,45 @@ final class ConfigValidator {
             }
             if let repository = github.repository, repository.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 issues.append(.init(severity: .warning, message: "provisioner.config.repository is set but empty."))
+            }
+        }
+    }
+
+    private func validateRunnerCacheMounts(_ runner: Config.RunnerConfig, issues: inout [ConfigValidationIssue]) {
+        let cacheTag = GitHubProvisioner.runnerCacheMountTag
+        let cacheMounts = runner.vm.mounts.filter { $0.tag == cacheTag }
+        guard !cacheMounts.isEmpty else {
+            return
+        }
+        if runner.provisioner.type != .github {
+            issues.append(.init(
+                severity: .warning,
+                message: "vm.mounts tag \(cacheTag) is set but provisioner is not github; cache mount will be ignored."
+            ))
+        }
+        if cacheMounts.count > 1 {
+            issues.append(.init(
+                severity: .warning,
+                message: "multiple vm.mounts entries tagged \(cacheTag); only the first will be used."
+            ))
+        }
+        for mount in cacheMounts {
+            let hostPath = mount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if hostPath.isEmpty {
+                continue
+            }
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: hostPath, isDirectory: &isDirectory), !isDirectory.boolValue {
+                issues.append(.init(
+                    severity: .error,
+                    message: "vm.mounts hostPath for \(cacheTag) must be a directory: \(hostPath)."
+                ))
+            }
+            if mount.readOnly {
+                issues.append(.init(
+                    severity: .warning,
+                    message: "vm.mounts tagged \(cacheTag) is readOnly; cache will not be populated on misses."
+                ))
             }
         }
     }
