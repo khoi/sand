@@ -78,20 +78,22 @@ if [ -z "$cache_dir_name" ]; then
   curl -fsSL -o actions-runner.tar.gz -L ${download_url}
   exit 0
 fi
+cache_candidates=()
 case "$cache_dir_name" in
   /*)
-    cache_candidates="$cache_dir_name"
+    cache_candidates+=("$cache_dir_name")
     ;;
   *)
     if [ "$(uname -s)" = "Darwin" ]; then
-      cache_candidates="/Volumes/My Shared Files/$cache_dir_name $HOME/$cache_dir_name"
+      cache_candidates+=("/Volumes/My Shared Files/$cache_dir_name")
+      cache_candidates+=("$HOME/$cache_dir_name")
     else
-      cache_candidates="$HOME/$cache_dir_name"
+      cache_candidates+=("$HOME/$cache_dir_name")
     fi
     ;;
 esac
 cache_dir=""
-for candidate in $cache_candidates; do
+for candidate in "${cache_candidates[@]}"; do
   if [ -d "$candidate" ]; then
     cache_dir="$candidate"
     break

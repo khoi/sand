@@ -94,8 +94,15 @@ struct Runner: @unchecked Sendable {
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard
         )
+        logRunOptions(name: name, options: runOptions)
         logger.info("boot VM \(name)")
-        try tart.run(name: name, options: runOptions)
+        do {
+            try tart.run(name: name, options: runOptions)
+        } catch {
+            logger.error("tart run failed for \(name): \(String(describing: error))")
+            throw error
+        }
+        logVMStatusAfterBoot(name: name)
         logger.info("wait for VM IP")
         let ip = try await resolveIP(name: name)
         logger.info("VM IP \(ip)")
@@ -264,6 +271,7 @@ struct Runner: @unchecked Sendable {
 
     private func waitForSSH(ssh: SSHClient) async -> Bool {
         var attempt = 0
+        var stoppedChecks = 0
         let maxRetries = ssh.config.connectMaxRetries
         while true {
             if let maxRetries, attempt >= maxRetries {
@@ -275,14 +283,24 @@ struct Runner: @unchecked Sendable {
                 let status = try tart.status(name: vmName)
                 if status != .running {
                     let reason = status == .missing ? "missing" : "stopped"
-                    logger.warning("VM \(vmName) not running (\(reason)) while waiting for SSH, restarting VM")
-                    return false
+                    if status == .missing {
+                        logger.warning("VM \(vmName) not running (\(reason)) while waiting for SSH (attempt \(attempt)), restarting VM")
+                        return false
+                    }
+                    stoppedChecks += 1
+                    if stoppedChecks >= 5 {
+                        logger.warning("VM \(vmName) not running (\(reason)) after \(stoppedChecks) checks, restarting VM")
+                        return false
+                    }
+                    logger.info("VM \(vmName) not running (\(reason)) while waiting for SSH (attempt \(attempt)), retrying")
                 }
             } catch {
                 logger.warning("Failed to check VM \(vmName) running state: \(String(describing: error))")
             }
             do {
                 try ssh.checkConnection()
+                stoppedChecks = 0
+                logger.info("SSH ready after \(attempt) attempt(s)")
                 return true
             } catch {
                 if let maxRetries {
@@ -304,8 +322,10 @@ struct Runner: @unchecked Sendable {
         while true {
             attempt += 1
             do {
+                logger.info("resolve VM IP (attempt \(attempt))")
                 return try tart.ip(name: name, wait: 180)
             } catch {
+                logger.warning("resolve VM IP failed (attempt \(attempt)): \(String(describing: error))")
                 if attempt >= 3 {
                     throw error
                 }
@@ -616,6 +636,39 @@ struct Runner: @unchecked Sendable {
             if prefixes.contains(where: { trimmed.hasPrefix($0) }) {
                 logger.info(trimmed)
             }
+        }
+    }
+
+    private func logRunOptions(name: String, options: Tart.RunOptions) {
+        logger.info("VM \(name) run options: noGraphics=\(options.noGraphics) noAudio=\(options.noAudio) noClipboard=\(options.noClipboard)")
+        if options.directoryMounts.isEmpty {
+            logger.info("VM \(name) mounts: none")
+            return
+        }
+        for mount in options.directoryMounts {
+            let tagInfo = mount.tag.map { ", tag=\($0)" } ?? ""
+            let mode = mount.readOnly ? "ro" : "rw"
+            logger.info("VM \(name) mount: \(mount.guestFolder) <- \(mount.hostPath) (\(mode)\(tagInfo))")
+        }
+    }
+
+    private func logVMStatusAfterBoot(name: String) {
+        do {
+            let status = try tart.status(name: name)
+            logger.info("VM \(name) status after tart run: \(statusLabel(status))")
+        } catch {
+            logger.warning("Failed to read VM \(name) status after tart run: \(String(describing: error))")
+        }
+    }
+
+    private func statusLabel(_ status: Tart.VMStatus) -> String {
+        switch status {
+        case .missing:
+            return "missing"
+        case .stopped:
+            return "stopped"
+        case .running:
+            return "running"
         }
     }
 
