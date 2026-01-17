@@ -6,6 +6,7 @@ struct Runner: @unchecked Sendable {
     let provisioner: GitHubProvisioner
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
+    let control: RunnerControl
     let vmName: String
     private let logger: Logger
     private let vmLogger: Logger
@@ -22,6 +23,7 @@ struct Runner: @unchecked Sendable {
         provisioner: GitHubProvisioner,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
+        control: RunnerControl,
         vmName: String,
         logLabel: String,
         logLevel: LogLevel
@@ -31,6 +33,7 @@ struct Runner: @unchecked Sendable {
         self.provisioner = provisioner
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
+        self.control = control
         self.vmName = vmName
         self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
         self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
@@ -118,6 +121,7 @@ struct Runner: @unchecked Sendable {
             vmName: name,
             ip: ip,
             ssh: vm.ssh,
+            control: control,
             state: healthCheckState
         )
         defer {
@@ -144,12 +148,38 @@ struct Runner: @unchecked Sendable {
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
                 let commands = provisioner.script(config: githubConfig, runnerToken: token)
-                for command in commands {
+                let runCommand = commands.last
+                for command in commands.dropLast() {
                     logScript(command)
                     let result = try ssh.exec(command: command)
                     if let result {
                         logIfNonEmpty(label: "stdout", text: result.stdout)
                         logIfNonEmpty(label: "stderr", text: result.stderr)
+                    }
+                }
+                if let runCommand {
+                    logScript(runCommand)
+                    let handle = try ssh.start(command: runCommand)
+                    control.setProvisioningHandle(handle)
+                    defer {
+                        control.clearProvisioningHandle(handle)
+                    }
+                    let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
+                    switch outcome {
+                    case let .completed(result):
+                        logIfNonEmpty(label: "stdout", text: result.stdout)
+                        logIfNonEmpty(label: "stderr", text: result.stderr)
+                    case let .failed(error):
+                        if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
+                            return
+                        }
+                        throw error
+                    case .healthCheckFailed:
+                        control.terminateProvisioning()
+                        Task.detached {
+                            _ = try? handle.wait()
+                        }
+                        return
                     }
                 }
                 logger.info("github provisioner finished")
@@ -260,6 +290,7 @@ struct Runner: @unchecked Sendable {
         vmName: String,
         ip: String,
         ssh: Config.SSH,
+        control: RunnerControl,
         state: HealthCheckState
     ) -> Task<Void, Never> {
         logger.info("healthCheck starting in \(healthCheck.delay)s")
@@ -281,6 +312,7 @@ struct Runner: @unchecked Sendable {
                     if !running {
                         logger.warning("VM \(vmName) not running, restarting VM")
                         state.markFailed(message: "vm not running")
+                        control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
                         return
                     }
@@ -297,6 +329,7 @@ struct Runner: @unchecked Sendable {
                         let message = "exit code \(exitCode)"
                         logger.warning("healthCheck failed with \(message), restarting VM")
                         state.markFailed(message: message)
+                        control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
                         return
                     }
@@ -309,6 +342,45 @@ struct Runner: @unchecked Sendable {
                     return
                 }
             }
+        }
+    }
+
+    private enum ProvisionerOutcome {
+        case completed(ProcessResult)
+        case failed(Error)
+        case healthCheckFailed(String)
+    }
+
+    private func awaitProvisionerCommand(
+        handle: ProcessHandle,
+        healthCheckState: HealthCheckState
+    ) async -> ProvisionerOutcome {
+        await withTaskGroup(of: ProvisionerOutcome?.self) { group in
+            group.addTask {
+                do {
+                    let result = try handle.wait()
+                    return .completed(result)
+                } catch {
+                    return .failed(error)
+                }
+            }
+            group.addTask {
+                do {
+                    let message = try await healthCheckState.waitForFailure()
+                    return .healthCheckFailed(message)
+                } catch is CancellationError {
+                    return nil
+                } catch {
+                    return .failed(error)
+                }
+            }
+            while let outcome = await group.next() {
+                if let outcome {
+                    group.cancelAll()
+                    return outcome
+                }
+            }
+            return .failed(ProcessRunnerError.invalidCommand)
         }
     }
 
@@ -388,11 +460,19 @@ struct Runner: @unchecked Sendable {
 private final class HealthCheckState: @unchecked Sendable {
     private let lock = NSLock()
     private var failureMessageStorage: String?
+    private var waiters: [UUID: CheckedContinuation<String, Error>] = [:]
 
     func markFailed(message: String) {
         lock.lock()
         if failureMessageStorage == nil {
             failureMessageStorage = message
+            let pending = waiters
+            waiters = [:]
+            lock.unlock()
+            for continuation in pending.values {
+                continuation.resume(returning: message)
+            }
+            return
         }
         lock.unlock()
     }
@@ -402,5 +482,41 @@ private final class HealthCheckState: @unchecked Sendable {
         let value = failureMessageStorage
         lock.unlock()
         return value
+    }
+
+    func waitForFailure() async throws -> String {
+        if let failureMessage = failureMessage {
+            return failureMessage
+        }
+        let waiterID = UUID()
+        return try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                if let failureMessageStorage {
+                    lock.unlock()
+                    continuation.resume(returning: failureMessageStorage)
+                    return
+                }
+                waiters[waiterID] = continuation
+                lock.unlock()
+                if Task.isCancelled {
+                    lock.lock()
+                    if let continuation = waiters.removeValue(forKey: waiterID) {
+                        lock.unlock()
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    lock.unlock()
+                }
+            }
+        }, onCancel: {
+            lock.lock()
+            if let continuation = waiters.removeValue(forKey: waiterID) {
+                lock.unlock()
+                continuation.resume(throwing: CancellationError())
+                return
+            }
+            lock.unlock()
+        })
     }
 }
