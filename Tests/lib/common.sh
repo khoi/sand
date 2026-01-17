@@ -46,6 +46,37 @@ cleanup_dir() {
   rm -rf "$dir"
 }
 
+register_e2e_artifacts() {
+  local config="${1:-}"
+  local log="${2:-}"
+  if [ -n "$config" ]; then
+    export SAND_E2E_CONFIG="$config"
+  fi
+  if [ -n "$log" ]; then
+    export SAND_E2E_LOG="$log"
+  fi
+}
+
+cleanup_runner() {
+  local pid="${1:-}"
+  local runner="${2:-}"
+  local config="${3:-}"
+  local workdir="${4:-}"
+  local timeout="${5:-180}"
+  if [ -n "$pid" ]; then
+    stop_process "$pid" TERM 10 || true
+  fi
+  if [ -n "$config" ]; then
+    "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$runner" ]; then
+    wait_for_vm_stopped_or_absent "$runner" "$timeout" || true
+  fi
+  if [ -n "$workdir" ]; then
+    cleanup_dir "$workdir"
+  fi
+}
+
 e2e_diagnostics() {
   if [ "${SAND_E2E_DIAG:-1}" = "0" ]; then
     return 0
@@ -95,7 +126,7 @@ unique_runner_name() {
 write_config() {
   local path="$1"
   local runner_name="$2"
-  export SAND_E2E_CONFIG="$path"
+  register_e2e_artifacts "$path"
   cat >"$path" <<EOF_CONFIG
 runners:
   - name: ${runner_name}
@@ -298,8 +329,7 @@ start_sand_run() {
   local config="$1"
   local log="$2"
   shift 2
-  export SAND_E2E_CONFIG="$config"
-  export SAND_E2E_LOG="$log"
+  register_e2e_artifacts "$config" "$log"
   : >"$log"
   "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
   echo $!

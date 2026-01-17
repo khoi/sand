@@ -347,6 +347,8 @@ struct Runner: @unchecked Sendable {
             let activationTime = Date()
             var sawSuccess = false
             let startupGrace = max(healthCheck.interval, 10)
+            let healthCheckLabel = commandSummary(healthCheck.command)
+            let healthCheckDescriptor = healthCheckLabel.isEmpty ? "healthCheck" : "healthCheck (\(healthCheckLabel))"
             while !Task.isCancelled {
                 do {
                     let status = try tart.status(name: vmName)
@@ -384,9 +386,9 @@ struct Runner: @unchecked Sendable {
                         let message = "exit code \(exitCode)"
                         let inStartupGrace = !sawSuccess && Date().timeIntervalSince(activationTime) < startupGrace
                         if inStartupGrace {
-                            logger.warning("healthCheck failed with \(message) during startup grace, retrying")
+                            logger.warning("\(healthCheckDescriptor) failed with \(message) during startup grace, retrying")
                         } else {
-                            logger.warning("healthCheck failed with \(message), restarting VM")
+                            logger.warning("\(healthCheckDescriptor) failed with \(message), restarting VM")
                             state.markFailed(message: message)
                             control.terminateProvisioning()
                             shutdownCoordinator.cleanup()
@@ -394,7 +396,7 @@ struct Runner: @unchecked Sendable {
                         }
                     }
                 } catch {
-                    logger.warning("healthCheck error (will retry): \(String(describing: error))")
+                    logger.warning("\(healthCheckDescriptor) error (will retry): \(String(describing: error))")
                 }
                 do {
                     try await Task.sleep(nanoseconds: nanos(from: healthCheck.interval))
@@ -451,8 +453,11 @@ struct Runner: @unchecked Sendable {
             let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
             switch outcome {
             case let .completed(result):
-                logIfNonEmpty(label: "stdout", text: result.stdout)
-                logIfNonEmpty(label: "stderr", text: result.stderr)
+                let commandLabel = commandSummary(command)
+                let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
+                let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
+                logIfNonEmpty(label: stdoutLabel, text: result.stdout)
+                logIfNonEmpty(label: stderrLabel, text: result.stderr)
                 logCacheStatusIfPresent(output: result.stdout)
                 return .completed(result)
             case let .failed(error):
@@ -561,6 +566,22 @@ struct Runner: @unchecked Sendable {
             return
         }
         logLines(logger: vmLogger, "[\(label)] \(text)", level: .info)
+    }
+
+    private func commandSummary(_ command: String) -> String {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+        let firstLine = trimmed.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let compact = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else {
+            return ""
+        }
+        if compact.count > 80 {
+            return String(compact.prefix(77)) + "..."
+        }
+        return compact
     }
 
     private func logCacheStatusIfPresent(output: String) {

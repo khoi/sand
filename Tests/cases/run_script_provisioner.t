@@ -12,8 +12,7 @@ config="$workdir/config.yml"
 write_config "$config" "$runner"
 
 cleanup() {
-  "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  cleanup_dir "$workdir"
+  cleanup_runner "" "$runner" "$config" "$workdir"
 }
 trap cleanup EXIT
 

@@ -10,13 +10,7 @@ workdir=$(mktemp_dir)
 log="$workdir/sand.log"
 
 cleanup() {
-  if [ -n "${sand_pid:-}" ]; then
-    stop_process "$sand_pid" TERM 10 || true
-  fi
-  if [ -n "${config:-}" ]; then
-    "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  fi
-  cleanup_dir "$workdir"
+  cleanup_runner "${sand_pid:-}" "" "${config:-}" "$workdir"
 }
 trap cleanup EXIT
 

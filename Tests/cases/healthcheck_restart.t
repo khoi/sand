@@ -42,11 +42,7 @@ runners:
 EOF_CONFIG
 
 cleanup() {
-  if [ -n "${sand_pid:-}" ]; then
-    stop_process "$sand_pid" TERM 10 || true
-  fi
-  "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  cleanup_dir "$workdir"
+  cleanup_runner "${sand_pid:-}" "$runner" "$config" "$workdir"
 }
 trap cleanup EXIT
 
