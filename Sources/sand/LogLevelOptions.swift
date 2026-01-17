@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 
 struct LogLevelOptions: ParsableArguments {
     @Option(name: .long, help: ArgumentHelp("Log level: trace, debug, info, notice, warning, error, critical.", valueName: "level"))
@@ -6,6 +7,9 @@ struct LogLevelOptions: ParsableArguments {
 
     @Flag(name: .shortAndLong, help: "Increase verbosity (-v, -vv, -vvv, -vvvv).")
     var verbose: Int
+
+    @Option(name: .long, help: ArgumentHelp("Write logs to a file.", valueName: "path"))
+    var logFile: String?
 
     func resolvedLevel() -> LogLevel {
         if let logLevel {
@@ -19,5 +23,20 @@ struct LogLevelOptions: ParsableArguments {
         default:
             return .trace
         }
+    }
+
+    func resolvedLogFile() -> String? {
+        if let logFile, !logFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return logFile
+        }
+        let env = ProcessInfo.processInfo.environment["SAND_LOG_FILE"] ?? ""
+        return env.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : env
+    }
+
+    func makeLogFileSink() throws -> LogFileSink? {
+        guard let path = resolvedLogFile() else {
+            return nil
+        }
+        return try LogFileSink(path: path)
     }
 }

@@ -1,0 +1,28 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
+export ROOT
+
+if [ -z "${SAND_BIN:-}" ]; then
+  if ! command -v swift >/dev/null 2>&1; then
+    printf '%s\n' "missing swift in PATH" >&2
+    exit 1
+  fi
+  swift build >/dev/null
+  BIN_PATH=$(swift build --show-bin-path)
+  SAND_BIN="$BIN_PATH/sand"
+fi
+
+export SAND_BIN
+if [ ! -x "$SAND_BIN" ]; then
+  printf '%s\n' "sand binary not found at $SAND_BIN" >&2
+  exit 1
+fi
+
+status=0
+for t in "$ROOT"/Tests/cases/*.t; do
+  printf '%s\n' "run $t" >&2
+  bash "$t" || status=$?
+done
+exit "$status"

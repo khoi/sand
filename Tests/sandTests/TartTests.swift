@@ -135,3 +135,36 @@ func isRunningUsesJsonList() throws {
         .init(executable: "tart", arguments: ["list", "--format", "json"], wait: true)
     ])
 }
+
+@Test
+func statusMissingWhenVmNotFound() throws {
+    let runner = MockProcessRunner()
+    runner.results = [
+        ProcessResult(stdout: "[]", stderr: "", exitCode: 0)
+    ]
+    let tart = makeTart(runner)
+    let status = try tart.status(name: "missing")
+    #expect(status == .missing)
+}
+
+@Test
+func statusRunningWhenVmIsRunning() throws {
+    let runner = MockProcessRunner()
+    runner.results = [
+        ProcessResult(stdout: "[{\"Name\":\"vm-1\",\"Running\":true}]", stderr: "", exitCode: 0)
+    ]
+    let tart = makeTart(runner)
+    let status = try tart.status(name: "vm-1")
+    #expect(status == .running)
+}
+
+@Test
+func statusStoppedWhenVmIsStopped() throws {
+    let runner = MockProcessRunner()
+    runner.results = [
+        ProcessResult(stdout: "[{\"Name\":\"vm-1\",\"Running\":false}]", stderr: "", exitCode: 0)
+    ]
+    let tart = makeTart(runner)
+    let status = try tart.status(name: "vm-1")
+    #expect(status == .stopped)
+}

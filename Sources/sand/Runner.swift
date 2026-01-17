@@ -10,6 +10,7 @@ struct Runner: @unchecked Sendable {
     let vmName: String
     private let logger: Logger
     private let vmLogger: Logger
+    private let restartBackoff = RestartBackoff()
     private static let healthCheckExitMarker = "__SAND_HEALTHCHECK_EXIT_CODE__"
 
     enum RunnerError: Error {
@@ -26,7 +27,8 @@ struct Runner: @unchecked Sendable {
         control: RunnerControl,
         vmName: String,
         logLabel: String,
-        logLevel: LogLevel
+        logLevel: LogLevel,
+        logSink: LogFileSink?
     ) {
         self.tart = tart
         self.github = github
@@ -35,8 +37,8 @@ struct Runner: @unchecked Sendable {
         self.shutdownCoordinator = shutdownCoordinator
         self.control = control
         self.vmName = vmName
-        self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
-        self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
+        self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel, sink: logSink)
+        self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel, sink: logSink)
     }
 
     func run() async throws {
@@ -55,6 +57,7 @@ struct Runner: @unchecked Sendable {
     }
 
     private func runOnce() async throws {
+        await applyRestartBackoffIfNeeded()
         let name = vmName
         let vm = config.vm
         let provisionerConfig = config.provisioner
@@ -96,6 +99,7 @@ struct Runner: @unchecked Sendable {
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {
+            scheduleRestart(reason: .sshNotReady)
             return
         }
         if let preRun = config.preRun {
@@ -119,13 +123,14 @@ struct Runner: @unchecked Sendable {
         let healthCheckTask = startHealthCheck(
             healthCheck: config.healthCheck ?? .standard,
             vmName: name,
-            ip: ip,
             ssh: vm.ssh,
             control: control,
             state: healthCheckState
         )
+        control.setHealthCheckTask(healthCheckTask)
         defer {
             healthCheckTask.cancel()
+            control.clearHealthCheckTask()
         }
         do {
             switch provisionerConfig.type {
@@ -134,13 +139,19 @@ struct Runner: @unchecked Sendable {
                     throw RunnerError.missingScript
                 }
                 logger.info("run script provisioner")
-                logScript(run)
-                let result = try ssh.exec(command: run)
-                if let result {
-                    logIfNonEmpty(label: "stdout", text: result.stdout)
-                    logIfNonEmpty(label: "stderr", text: result.stderr)
+                let outcome = await runProvisionerCommands([run], ssh: ssh, healthCheckState: healthCheckState)
+                switch outcome {
+                case .completed:
+                    logger.info("script provisioner finished")
+                case let .failed(error):
+                    if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
+                        return
+                    }
+                    throw error
+                case let .healthCheckFailed(message):
+                    scheduleRestart(reason: .healthCheckFailed(message))
+                    return
                 }
-                logger.info("script provisioner finished")
             case .github:
                 guard let github, let githubConfig = provisionerConfig.github else {
                     throw RunnerError.missingGitHub
@@ -148,41 +159,19 @@ struct Runner: @unchecked Sendable {
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
                 let commands = provisioner.script(config: githubConfig, runnerToken: token)
-                let runCommand = commands.last
-                for command in commands.dropLast() {
-                    logScript(command)
-                    let result = try ssh.exec(command: command)
-                    if let result {
-                        logIfNonEmpty(label: "stdout", text: result.stdout)
-                        logIfNonEmpty(label: "stderr", text: result.stderr)
-                    }
-                }
-                if let runCommand {
-                    logScript(runCommand)
-                    let handle = try ssh.start(command: runCommand)
-                    control.setProvisioningHandle(handle)
-                    defer {
-                        control.clearProvisioningHandle(handle)
-                    }
-                    let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
-                    switch outcome {
-                    case let .completed(result):
-                        logIfNonEmpty(label: "stdout", text: result.stdout)
-                        logIfNonEmpty(label: "stderr", text: result.stderr)
-                    case let .failed(error):
-                        if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
-                            return
-                        }
-                        throw error
-                    case .healthCheckFailed:
-                        control.terminateProvisioning()
-                        Task.detached {
-                            _ = try? handle.wait()
-                        }
+                let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
+                switch outcome {
+                case .completed:
+                    logger.info("github provisioner finished")
+                case let .failed(error):
+                    if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         return
                     }
+                    throw error
+                case let .healthCheckFailed(message):
+                    scheduleRestart(reason: .healthCheckFailed(message))
+                    return
                 }
-                logger.info("github provisioner finished")
             }
         } catch {
             if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
@@ -207,9 +196,11 @@ struct Runner: @unchecked Sendable {
                 throw error
             }
         }
-        if healthCheckState.failureMessage != nil {
+        if let message = healthCheckState.failureMessage {
+            scheduleRestart(reason: .healthCheckFailed(message))
             return
         }
+        restartBackoff.reset()
     }
 
     private func applyVMConfigIfNeeded(name: String, vm: Config.VM) throws {
@@ -244,9 +235,10 @@ struct Runner: @unchecked Sendable {
             }
             attempt += 1
             do {
-                let running = try tart.isRunning(name: vmName)
-                if !running {
-                    logger.warning("VM \(vmName) not running while waiting for SSH, restarting VM")
+                let status = try tart.status(name: vmName)
+                if status != .running {
+                    let reason = status == .missing ? "missing" : "stopped"
+                    logger.warning("VM \(vmName) not running (\(reason)) while waiting for SSH, restarting VM")
                     return false
                 }
             } catch {
@@ -285,10 +277,19 @@ struct Runner: @unchecked Sendable {
         }
     }
 
+    private func resolveHealthCheckIP(name: String, interval: TimeInterval) -> String? {
+        let waitSeconds = max(5, Int(min(interval, 10)))
+        do {
+            return try tart.ip(name: name, wait: waitSeconds)
+        } catch {
+            logger.debug("healthCheck failed to resolve IP: \(String(describing: error))")
+            return nil
+        }
+    }
+
     private func startHealthCheck(
         healthCheck: Config.HealthCheck,
         vmName: String,
-        ip: String,
         ssh: Config.SSH,
         control: RunnerControl,
         state: HealthCheckState
@@ -308,10 +309,19 @@ struct Runner: @unchecked Sendable {
             logger.info("healthCheck active (interval: \(healthCheck.interval)s)")
             while !Task.isCancelled {
                 do {
-                    let running = try tart.isRunning(name: vmName)
-                    if !running {
-                        logger.warning("VM \(vmName) not running, restarting VM")
-                        state.markFailed(message: "vm not running")
+                    let status = try tart.status(name: vmName)
+                    if status != .running {
+                        let message: String
+                        switch status {
+                        case .missing:
+                            message = "vm missing"
+                        case .stopped:
+                            message = "vm stopped"
+                        case .running:
+                            message = "vm running"
+                        }
+                        logger.warning("VM \(vmName) not running (\(message)), restarting VM")
+                        state.markFailed(message: message)
                         control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
                         return
@@ -320,6 +330,9 @@ struct Runner: @unchecked Sendable {
                     logger.warning("Failed to check VM \(vmName) running state: \(String(describing: error))")
                 }
                 do {
+                    guard let ip = resolveHealthCheckIP(name: vmName, interval: healthCheck.interval) else {
+                        continue
+                    }
                     let probe = SSHClient(processRunner: tart.processRunner, host: ip, config: ssh)
                     let probeCommand = wrapHealthCheckCommand(healthCheck.command)
                     let result = try probe.exec(command: probeCommand)
@@ -349,6 +362,63 @@ struct Runner: @unchecked Sendable {
         case completed(ProcessResult)
         case failed(Error)
         case healthCheckFailed(String)
+    }
+
+    private enum ProvisionerSequenceOutcome {
+        case completed
+        case failed(Error)
+        case healthCheckFailed(String)
+    }
+
+    private func runProvisionerCommands(
+        _ commands: [String],
+        ssh: SSHClient,
+        healthCheckState: HealthCheckState
+    ) async -> ProvisionerSequenceOutcome {
+        for command in commands {
+            let outcome = await runProvisionerCommand(command, ssh: ssh, healthCheckState: healthCheckState)
+            switch outcome {
+            case .completed:
+                continue
+            case let .failed(error):
+                return .failed(error)
+            case let .healthCheckFailed(message):
+                return .healthCheckFailed(message)
+            }
+        }
+        return .completed
+    }
+
+    private func runProvisionerCommand(
+        _ command: String,
+        ssh: SSHClient,
+        healthCheckState: HealthCheckState
+    ) async -> ProvisionerOutcome {
+        logScript(command)
+        do {
+            let handle = try ssh.start(command: command)
+            control.setProvisioningHandle(handle)
+            defer {
+                control.clearProvisioningHandle(handle)
+            }
+            let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
+            switch outcome {
+            case let .completed(result):
+                logIfNonEmpty(label: "stdout", text: result.stdout)
+                logIfNonEmpty(label: "stderr", text: result.stderr)
+                return .completed(result)
+            case let .failed(error):
+                return .failed(error)
+            case let .healthCheckFailed(message):
+                control.terminateProvisioning()
+                Task.detached {
+                    _ = try? handle.wait()
+                }
+                return .healthCheckFailed(message)
+            }
+        } catch {
+            return .failed(error)
+        }
     }
 
     private func awaitProvisionerCommand(
@@ -411,6 +481,27 @@ struct Runner: @unchecked Sendable {
         return UInt64(nanos)
     }
 
+    private func scheduleRestart(reason: RestartReason) {
+        _ = restartBackoff.schedule(reason: reason)
+    }
+
+    private func applyRestartBackoffIfNeeded() async {
+        let (delay, reason) = restartBackoff.takePending()
+        guard delay > 0 else {
+            return
+        }
+        if let reason {
+            logger.warning("restart backoff \(delay)s (\(reason))")
+        } else {
+            logger.warning("restart backoff \(delay)s")
+        }
+        do {
+            try await Task.sleep(nanoseconds: nanos(from: delay))
+        } catch {
+            return
+        }
+    }
+
     private func logLines(logger: Logger, _ text: String, level: LogLevel) {
         for line in text.split(whereSeparator: \.isNewline) {
             logger.log(level, "\(line)")
@@ -429,7 +520,8 @@ struct Runner: @unchecked Sendable {
     }
 
     private func handleStageFailure(_ error: Error, stage: String, healthCheckState: HealthCheckState?) -> Bool {
-        if healthCheckState?.failureMessage != nil {
+        if let message = healthCheckState?.failureMessage {
+            scheduleRestart(reason: .healthCheckFailed(message))
             return true
         }
         logStageFailure(error, stage: stage)
@@ -437,6 +529,7 @@ struct Runner: @unchecked Sendable {
             return false
         }
         logger.warning("\(stage) failed, restarting VM")
+        scheduleRestart(reason: .stageFailed(stage))
         shutdownCoordinator.cleanup()
         return true
     }

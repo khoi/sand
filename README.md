@@ -20,7 +20,18 @@ brew install sand
 ```
 sand run --config config.yml
 sand destroy --config config.yml
+sand run --dry-run --config config.yml
 ```
+
+## Local test suite
+
+To run the local bash e2e tests (no CI):
+
+```
+./Tests/run
+```
+
+These tests spin up real VMs and require `tart`, `ssh`, and `sshpass` on your machine. See `Tests/README.md` for environment overrides (image, timeout, SSH creds, etc).
 
 ## Start up on boot
 
@@ -77,6 +88,12 @@ sand logs to macOS default logging system using `os_log`. To see the log
 ```
 log show --predicate "subsystem == \"sand\"" --last 1h --info --debug
 log stream --predicate 'subsystem == "sand"' --debug --info --style compact --color always
+```
+
+You can also write logs to a file:
+
+```
+sand run --config config.yml --log-file /tmp/sand.log
 ```
 
 ## Configuration

@@ -3,6 +3,7 @@ import Foundation
 final class RunnerControl: @unchecked Sendable {
     private let lock = NSLock()
     private var provisioningHandle: ProcessHandle?
+    private var healthCheckTask: Task<Void, Never>?
 
     func setProvisioningHandle(_ handle: ProcessHandle) {
         lock.lock()
@@ -24,5 +25,25 @@ final class RunnerControl: @unchecked Sendable {
         provisioningHandle = nil
         lock.unlock()
         handle?.terminate()
+    }
+
+    func setHealthCheckTask(_ task: Task<Void, Never>) {
+        lock.lock()
+        healthCheckTask = task
+        lock.unlock()
+    }
+
+    func clearHealthCheckTask() {
+        lock.lock()
+        healthCheckTask = nil
+        lock.unlock()
+    }
+
+    func cancelHealthCheck() {
+        lock.lock()
+        let task = healthCheckTask
+        healthCheckTask = nil
+        lock.unlock()
+        task?.cancel()
     }
 }

@@ -37,10 +37,14 @@ enum LogLevel: String, ExpressibleByArgument, CaseIterable, Comparable {
 struct Logger {
     private let logger: os.Logger
     private let minimumLevel: LogLevel
+    private let fileSink: LogFileSink?
+    private let label: String
 
-    init(label: String, minimumLevel: LogLevel) {
+    init(label: String, minimumLevel: LogLevel, sink: LogFileSink? = nil) {
         logger = os.Logger(subsystem: "sand", category: label)
         self.minimumLevel = minimumLevel
+        self.fileSink = sink
+        self.label = label
     }
 
     func trace(_ message: String) {
@@ -91,5 +95,6 @@ struct Logger {
         case .critical:
             logger.fault("\(message, privacy: .public)")
         }
+        fileSink?.write(level: level, label: label, message: message)
     }
 }

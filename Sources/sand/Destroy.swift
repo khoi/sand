@@ -10,7 +10,8 @@ struct Destroy: ParsableCommand {
 
     func run() throws {
         let level = logLevel.resolvedLevel()
-        let logger = Logger(label: "sand.destroy", minimumLevel: level)
+        let logSink = try logLevel.makeLogFileSink()
+        let logger = Logger(label: "sand.destroy", minimumLevel: level, sink: logSink)
         let missing = DependencyChecker.missingCommands(["tart"])
         if !missing.isEmpty {
             throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
@@ -26,7 +27,7 @@ struct Destroy: ParsableCommand {
         for warning in issues where warning.severity == .warning {
             logger.warning("\(warning.message)")
         }
-        let tart = Tart(processRunner: SystemProcessRunner(), logger: Logger(label: "tart.destroy", minimumLevel: level))
+        let tart = Tart(processRunner: SystemProcessRunner(), logger: Logger(label: "tart.destroy", minimumLevel: level, sink: logSink))
         let destroyer = VMDestroyer(tart: tart, logger: logger)
         var firstError: Error?
         for runner in config.runners {

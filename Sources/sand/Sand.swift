@@ -16,11 +16,15 @@ struct Run: AsyncParsableCommand {
     var config: String = Config.defaultPath
     @OptionGroup
     var logLevel: LogLevelOptions
+    @Flag(name: .long, help: "Validate configuration and prepare VM images without booting.")
+    var dryRun: Bool = false
 
     mutating func run() async throws {
         let level = logLevel.resolvedLevel()
-        let logger = Logger(label: "sand", minimumLevel: level)
-        let missing = DependencyChecker.missingCommands(["tart", "sshpass", "ssh"])
+        let logSink = try logLevel.makeLogFileSink()
+        let logger = Logger(label: "sand", minimumLevel: level, sink: logSink)
+        let requiredDependencies = dryRun ? ["tart"] : ["tart", "sshpass", "ssh"]
+        let missing = DependencyChecker.missingCommands(requiredDependencies)
         if !missing.isEmpty {
             throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
         }
@@ -36,6 +40,20 @@ struct Run: AsyncParsableCommand {
             logger.warning("\(warning.message)")
         }
         let processRunner = SystemProcessRunner()
+        if dryRun {
+            for (index, runnerConfig) in config.runners.enumerated() {
+                let runnerIndex = index + 1
+                let runnerName = runnerConfig.name
+                let logLabel = runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
+                let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level, sink: logSink))
+                let source = runnerConfig.vm.source.resolvedSource
+                logger.info("dry-run: prepare source \(source) for \(logLabel)")
+                try tart.prepare(source: source)
+            }
+            logger.info("dry-run complete")
+            return
+        }
+
         let provisioner = GitHubProvisioner()
         var runners: [Runner] = []
         var cleanupTargets: [VMShutdownCoordinator] = []
@@ -44,8 +62,8 @@ struct Run: AsyncParsableCommand {
             let runnerIndex = index + 1
             let runnerName = runnerConfig.name
             let logLabel = runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
-            let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level))
-            let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)", minimumLevel: level)
+            let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level, sink: logSink))
+            let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)", minimumLevel: level, sink: logSink)
             let destroyer = VMDestroyer(tart: tart, logger: shutdownLogger)
             let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer)
             let runnerControl = RunnerControl()
@@ -61,14 +79,16 @@ struct Run: AsyncParsableCommand {
                 control: runnerControl,
                 vmName: runnerName,
                 logLabel: logLabel,
-                logLevel: level
+                logLevel: level,
+                logSink: logSink
             )
             runners.append(runner)
         }
-        let shutdownLogger = Logger(label: "sand.shutdown", minimumLevel: level)
+        let shutdownLogger = Logger(label: "sand.shutdown", minimumLevel: level, sink: logSink)
         let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
             for control in runnerControls {
                 control.terminateProvisioning()
+                control.cancelHealthCheck()
             }
             for coordinator in cleanupTargets {
                 coordinator.cleanup()
