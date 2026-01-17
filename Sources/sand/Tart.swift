@@ -5,6 +5,11 @@ enum TartError: Error {
 }
 
 struct Tart {
+    enum VMStatus {
+        case missing
+        case stopped
+        case running
+    }
     struct DirectoryMount: Equatable {
         let hostPath: String
         let guestFolder: String
@@ -137,12 +142,19 @@ struct Tart {
     }
 
     func isRunning(name: String) throws -> Bool {
+        return try status(name: name) == .running
+    }
+
+    func status(name: String) throws -> VMStatus {
         let result = try run(arguments: ["list", "--format", "json"], wait: true)
         let output = result?.stdout ?? ""
-        guard let running = runningFromJSON(output: output, name: name) else {
-            return false
+        guard let entry = entryFromJSON(output: output, name: name) else {
+            return .missing
         }
-        return running
+        if entry.running == true {
+            return .running
+        }
+        return .stopped
     }
 
     private func isOCISource(_ source: String) -> Bool {
@@ -180,14 +192,14 @@ struct Tart {
         }
     }
 
-    private func runningFromJSON(output: String, name: String) -> Bool? {
+    private func entryFromJSON(output: String, name: String) -> TartListEntry? {
         guard let data = output.data(using: .utf8) else {
             return nil
         }
         guard let entries = try? JSONDecoder().decode([TartListEntry].self, from: data) else {
             return nil
         }
-        return entries.first(where: { $0.name == name })?.running ?? false
+        return entries.first(where: { $0.name == name })
     }
 
 
