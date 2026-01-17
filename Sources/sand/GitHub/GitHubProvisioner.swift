@@ -73,19 +73,43 @@ echo $download_url
             return "curl -fsSL -o actions-runner.tar.gz -L ${download_url}"
         }
         return """
-cache_dir="\(cacheDirectory)"
-case "$cache_dir" in
-  /*) ;;
-  *) cache_dir="$HOME/$cache_dir" ;;
+cache_dir_name="\(cacheDirectory)"
+if [ -z "$cache_dir_name" ]; then
+  curl -fsSL -o actions-runner.tar.gz -L ${download_url}
+  exit 0
+fi
+case "$cache_dir_name" in
+  /*)
+    cache_candidates="$cache_dir_name"
+    ;;
+  *)
+    if [ "$(uname -s)" = "Darwin" ]; then
+      cache_candidates="/Volumes/My Shared Files/$cache_dir_name $HOME/$cache_dir_name"
+    else
+      cache_candidates="$HOME/$cache_dir_name"
+    fi
+    ;;
 esac
+cache_dir=""
+for candidate in $cache_candidates; do
+  if [ -d "$candidate" ]; then
+    cache_dir="$candidate"
+    break
+  fi
+done
+if [ -z "$cache_dir" ]; then
+  echo "runner cache unavailable: $cache_dir_name not mounted"
+  curl -fsSL -o actions-runner.tar.gz -L ${download_url}
+  exit 0
+fi
 cache_file="${cache_dir}/${asset}"
-if [ -d "$cache_dir" ] && [ -f "$cache_file" ]; then
+if [ -f "$cache_file" ]; then
   echo "runner cache hit: $cache_file"
   cp "$cache_file" actions-runner.tar.gz
 else
   echo "runner cache miss: downloading"
   curl -fsSL -o actions-runner.tar.gz -L ${download_url}
-  if [ -d "$cache_dir" ] && [ -w "$cache_dir" ]; then
+  if [ -w "$cache_dir" ]; then
     tmp_file="${cache_dir}/.${asset}.tmp.$$"
     cp actions-runner.tar.gz "$tmp_file" && mv "$tmp_file" "$cache_file"
     echo "runner cache populated: $cache_file"

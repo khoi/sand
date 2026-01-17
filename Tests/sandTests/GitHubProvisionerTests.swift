@@ -55,6 +55,7 @@ func scriptIncludesRunnerCacheLogic() {
     let joined = script.joined(separator: "\n")
     #expect(joined.contains("runner cache hit"))
     #expect(joined.contains("runner cache miss"))
+    #expect(joined.contains("runner cache unavailable"))
     #expect(joined.contains("cache_dir="))
     #expect(joined.contains("cache_file="))
 }
@@ -73,5 +74,5 @@ func scriptUsesRunnerCacheDirectoryValue() {
     let cacheDirectory = "/var/tmp/runner-cache"
     let script = provisioner.script(config: config, runnerToken: "token", cacheDirectory: cacheDirectory)
     let joined = script.joined(separator: "\n")
-    #expect(joined.contains("cache_dir=\"\(cacheDirectory)\""))
+    #expect(joined.contains("cache_dir_name=\"\(cacheDirectory)\""))
 }
