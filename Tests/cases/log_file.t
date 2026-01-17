@@ -10,6 +10,7 @@ workdir=$(mktemp_dir)
 runner=$(unique_runner_name)
 config="$workdir/config.yml"
 log="$workdir/sand.log"
+register_e2e_artifacts "$config" "$log"
 
 cat >"$config" <<EOF_CONFIG
 runners:
@@ -38,8 +39,7 @@ runners:
 EOF_CONFIG
 
 cleanup() {
-  "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  cleanup_dir "$workdir"
+  cleanup_runner "" "$runner" "$config" "$workdir"
 }
 trap cleanup EXIT
 

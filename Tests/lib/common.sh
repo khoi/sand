@@ -3,6 +3,7 @@ set -euo pipefail
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
+  e2e_diagnostics
   exit 1
 }
 
@@ -45,6 +46,59 @@ cleanup_dir() {
   rm -rf "$dir"
 }
 
+register_e2e_artifacts() {
+  local config="${1:-}"
+  local log="${2:-}"
+  if [ -n "$config" ]; then
+    export SAND_E2E_CONFIG="$config"
+  fi
+  if [ -n "$log" ]; then
+    export SAND_E2E_LOG="$log"
+  fi
+}
+
+cleanup_runner() {
+  local pid="${1:-}"
+  local runner="${2:-}"
+  local config="${3:-}"
+  local workdir="${4:-}"
+  local timeout="${5:-180}"
+  if [ -n "$pid" ]; then
+    stop_process "$pid" TERM 10 || true
+  fi
+  if [ -n "$config" ]; then
+    "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$runner" ]; then
+    wait_for_vm_stopped_or_absent "$runner" "$timeout" || true
+  fi
+  if [ -n "$workdir" ]; then
+    cleanup_dir "$workdir"
+  fi
+}
+
+e2e_diagnostics() {
+  if [ "${SAND_E2E_DIAG:-1}" = "0" ]; then
+    return 0
+  fi
+  set +e
+  printf '\n---- e2e diagnostics ----\n' >&2
+  if command -v tart >/dev/null 2>&1; then
+    printf '[tart list]\n' >&2
+    tart list --format json >&2
+  fi
+  if [ -n "${SAND_E2E_LOG:-}" ] && [ -f "$SAND_E2E_LOG" ]; then
+    printf '[sand log tail]\n' >&2
+    tail -n 200 "$SAND_E2E_LOG" >&2
+  fi
+  if [ -n "${SAND_E2E_CONFIG:-}" ] && [ -f "$SAND_E2E_CONFIG" ]; then
+    printf '[config]\n' >&2
+    cat "$SAND_E2E_CONFIG" >&2
+  fi
+  printf '---- end diagnostics ----\n' >&2
+  set -e
+}
+
 init_defaults() {
   export SAND_E2E_IMAGE="${SAND_E2E_IMAGE:-ghcr.io/cirruslabs/ubuntu:latest}"
   export SAND_E2E_TIMEOUT_SEC="${SAND_E2E_TIMEOUT_SEC:-900}"
@@ -72,6 +126,7 @@ unique_runner_name() {
 write_config() {
   local path="$1"
   local runner_name="$2"
+  register_e2e_artifacts "$path"
   cat >"$path" <<EOF_CONFIG
 runners:
   - name: ${runner_name}
@@ -134,6 +189,26 @@ wait_for_vm_absent() {
     now=$(date +%s)
     if [ $((now - start)) -ge "$timeout" ]; then
       fail "timed out waiting for VM $name to disappear"
+    fi
+    sleep 5
+  done
+}
+
+wait_for_vm_stopped_or_absent() {
+  local name="$1"
+  local timeout="$2"
+  local start
+  start=$(date +%s)
+  while true; do
+    local state
+    state=$(tart_vm_state "$name")
+    if [ "$state" = "missing" ] || [ "$state" = "stopped" ]; then
+      return 0
+    fi
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      fail "timed out waiting for VM $name to stop or disappear"
     fi
     sleep 5
   done
@@ -254,6 +329,7 @@ start_sand_run() {
   local config="$1"
   local log="$2"
   shift 2
+  register_e2e_artifacts "$config" "$log"
   : >"$log"
   "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
   echo $!

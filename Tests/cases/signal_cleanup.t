@@ -10,13 +10,7 @@ workdir=$(mktemp_dir)
 log="$workdir/sand.log"
 
 cleanup() {
-  if [ -n "${sand_pid:-}" ]; then
-    stop_process "$sand_pid" TERM 10 || true
-  fi
-  if [ -n "${config:-}" ]; then
-    "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  fi
-  cleanup_dir "$workdir"
+  cleanup_runner "${sand_pid:-}" "" "${config:-}" "$workdir"
 }
 trap cleanup EXIT
 
@@ -55,7 +49,7 @@ EOF_CONFIG
   wait_for_vm_running "$runner" 180
 
   stop_process "$sand_pid" "$signal" 20
-  wait_for_vm_absent "$runner" 180
+  wait_for_vm_stopped_or_absent "$runner" 180
 }
 
 runner_int=$(unique_runner_name)

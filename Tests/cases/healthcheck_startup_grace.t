@@ -14,7 +14,7 @@ log="$workdir/sand.log"
 cat >"$config" <<EOF_CONFIG
 runners:
   - name: ${runner}
-    stopAfter: null
+    stopAfter: 1
     vm:
       source:
         type: oci
@@ -29,15 +29,14 @@ runners:
       type: script
       config:
         run: |
-          echo "e2e healthcheck provision ${runner}"
-          sleep 60
+          sleep 3
+          touch /tmp/e2e_health_ok
+          sleep 20
     preRun: |
-      echo "e2e healthcheck preRun ${runner}"
       date +%s%N > /tmp/e2e_boot_id
-      touch /tmp/e2e_health_ok
     healthCheck:
       command: "test -f /tmp/e2e_health_ok"
-      interval: 2
+      interval: 5
       delay: 1
 EOF_CONFIG
 
@@ -52,24 +51,34 @@ wait_for_vm_running "$runner" 180
 ip=$(vm_ip "$runner")
 
 wait_for_vm_file "$ip" /tmp/e2e_boot_id 60
-
-boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+boot_id=""
+for _ in 1 2 3 4 5; do
+  boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+  if [ -n "$boot_id" ]; then
+    break
+  fi
+  sleep 2
+done
 if [ -z "$boot_id" ]; then
   fail "failed to read initial boot id"
 fi
 
-ssh_exec "$ip" "rm -f /tmp/e2e_health_ok" >/dev/null 2>&1 || true
+wait_for_vm_file "$ip" /tmp/e2e_health_ok 60
+sleep 8
 
-wait_for_vm_restarted "$runner" 180
-wait_for_vm_running "$runner" 180
-ip=$(vm_ip "$runner")
-wait_for_vm_file "$ip" /tmp/e2e_boot_id 60
-new_boot_id=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
-if [ -z "$new_boot_id" ]; then
-  fail "failed to read boot id after restart"
+boot_id_after=""
+for _ in 1 2 3 4 5; do
+  boot_id_after=$(ssh_exec "$ip" "cat /tmp/e2e_boot_id" 2>/dev/null || true)
+  if [ -n "$boot_id_after" ]; then
+    break
+  fi
+  sleep 2
+done
+if [ -z "$boot_id_after" ]; then
+  fail "failed to read boot id after healthcheck"
 fi
-if [ "$new_boot_id" = "$boot_id" ]; then
-  fail "VM boot id did not change after restart"
+if [ "$boot_id_after" != "$boot_id" ]; then
+  fail "VM restarted during startup grace window"
 fi
 
 stop_process "$sand_pid" TERM 20

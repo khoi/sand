@@ -49,6 +49,11 @@ runners:
         type: oci
         image: "ghcr.io/cirruslabs/ubuntu:latest"
         path: null
+      mounts:
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
       ssh:
         user: admin
         password: admin

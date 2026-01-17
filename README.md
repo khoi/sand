@@ -108,6 +108,11 @@ runners:
       source:
         type: oci
         image: ghcr.io/cirruslabs/macos-runner:tahoe
+      mounts:
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
     provisioner:
       type: github
       config:
@@ -121,6 +126,13 @@ runners:
       interval: 30
       delay: 60
 ```
+
+To enable runner caching, add a `vm.mounts` entry tagged `actions-runner-cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. The cache directory inside the VM is the mount’s `guestFolder`. If the mount is read-only, cache misses will still download but the archive won’t be persisted.
+
+Common pitfalls:
+- `readOnly: true` on the cache mount prevents cache population on misses.
+- `hostPath` must be a directory (missing paths are created; file paths are rejected).
+- cache mounts are ignored unless the provisioner type is `github`.
 
 ### Custom provisioner script
 

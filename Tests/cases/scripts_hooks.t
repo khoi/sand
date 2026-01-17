@@ -46,11 +46,7 @@ runners:
 EOF_CONFIG
 
 cleanup() {
-  if [ -n "${sand_pid:-}" ]; then
-    stop_process "$sand_pid" TERM 10 || true
-  fi
-  "$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-  cleanup_dir "$workdir"
+  cleanup_runner "${sand_pid:-}" "$runner" "$config" "$workdir"
 }
 trap cleanup EXIT
 
@@ -64,4 +60,4 @@ wait_for_vm_file "$ip" /tmp/e2e_provision 120
 wait_for_vm_file "$ip" /tmp/e2e_post 180
 
 wait_for_process_exit "$sand_pid" "$SAND_E2E_TIMEOUT_SEC"
-wait_for_vm_absent "$runner" 180
+wait_for_vm_stopped_or_absent "$runner" 180

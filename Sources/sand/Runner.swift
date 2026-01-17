@@ -79,15 +79,17 @@ struct Runner: @unchecked Sendable {
             shutdownCoordinator.cleanup()
         }
         try applyVMConfigIfNeeded(name: name, vm: vm)
+        let runnerCacheDirectory = prepareRunnerCacheDirectory(for: config)
+        let directoryMounts = vm.mounts.map {
+            Tart.DirectoryMount(
+                hostPath: $0.hostPath,
+                guestFolder: $0.guestFolder,
+                readOnly: $0.readOnly,
+                tag: $0.tag
+            )
+        }
         let runOptions = Tart.RunOptions(
-            directoryMounts: vm.mounts.map {
-                Tart.DirectoryMount(
-                    hostPath: $0.hostPath,
-                    guestFolder: $0.guestFolder,
-                    readOnly: $0.readOnly,
-                    tag: $0.tag
-                )
-            },
+            directoryMounts: directoryMounts,
             noAudio: vm.hardware?.audio == false,
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard
@@ -158,7 +160,7 @@ struct Runner: @unchecked Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
-                let commands = provisioner.script(config: githubConfig, runnerToken: token)
+                let commands = provisioner.script(config: githubConfig, runnerToken: token, cacheDirectory: runnerCacheDirectory)
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
                 case .completed:
@@ -223,6 +225,41 @@ struct Runner: @unchecked Sendable {
             displayRefit: displayRefit,
             diskSizeGb: diskSizeGb
         )
+    }
+
+    private func prepareRunnerCacheDirectory(for config: Config.RunnerConfig) -> String? {
+        guard config.provisioner.type == .github else {
+            return nil
+        }
+        let cacheMounts = config.vm.mounts.filter { $0.tag == GitHubProvisioner.runnerCacheMountTag }
+        guard let cacheMount = cacheMounts.first else {
+            return nil
+        }
+        if cacheMounts.count > 1 {
+            logger.warning("multiple vm.mounts entries tagged \(GitHubProvisioner.runnerCacheMountTag); using the first")
+        }
+        let guestFolder = cacheMount.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostPath = cacheMount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if guestFolder.isEmpty || hostPath.isEmpty {
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory) {
+            if !isDirectory.boolValue {
+                logger.warning("runner cache hostPath exists but is not a directory: \(hostPath)")
+                return nil
+            }
+        } else {
+            do {
+                try fileManager.createDirectory(atPath: hostPath, withIntermediateDirectories: true)
+            } catch {
+                logger.warning("runner cache hostPath could not be created at \(hostPath): \(String(describing: error))")
+                return nil
+            }
+        }
+        logger.info("runner cache enabled via mount tag \(GitHubProvisioner.runnerCacheMountTag): \(hostPath) -> \(guestFolder)")
+        return guestFolder
     }
 
     private func waitForSSH(ssh: SSHClient) async -> Bool {
@@ -307,6 +344,11 @@ struct Runner: @unchecked Sendable {
                 return
             }
             logger.info("healthCheck active (interval: \(healthCheck.interval)s)")
+            let activationTime = Date()
+            var sawSuccess = false
+            let startupGrace = max(healthCheck.interval, 10)
+            let healthCheckLabel = commandSummary(healthCheck.command)
+            let healthCheckDescriptor = healthCheckLabel.isEmpty ? "healthCheck" : "healthCheck (\(healthCheckLabel))"
             while !Task.isCancelled {
                 do {
                     let status = try tart.status(name: vmName)
@@ -338,16 +380,23 @@ struct Runner: @unchecked Sendable {
                     let result = try probe.exec(command: probeCommand)
                     let output = result?.stdout ?? ""
                     let exitCode = parseHealthCheckExitCode(output: output) ?? 1
-                    guard exitCode == 0 else {
+                    if exitCode == 0 {
+                        sawSuccess = true
+                    } else {
                         let message = "exit code \(exitCode)"
-                        logger.warning("healthCheck failed with \(message), restarting VM")
-                        state.markFailed(message: message)
-                        control.terminateProvisioning()
-                        shutdownCoordinator.cleanup()
-                        return
+                        let inStartupGrace = !sawSuccess && Date().timeIntervalSince(activationTime) < startupGrace
+                        if inStartupGrace {
+                            logger.warning("\(healthCheckDescriptor) failed with \(message) during startup grace, retrying")
+                        } else {
+                            logger.warning("\(healthCheckDescriptor) failed with \(message), restarting VM")
+                            state.markFailed(message: message)
+                            control.terminateProvisioning()
+                            shutdownCoordinator.cleanup()
+                            return
+                        }
                     }
                 } catch {
-                    logger.warning("healthCheck error (will retry): \(String(describing: error))")
+                    logger.warning("\(healthCheckDescriptor) error (will retry): \(String(describing: error))")
                 }
                 do {
                     try await Task.sleep(nanoseconds: nanos(from: healthCheck.interval))
@@ -404,8 +453,12 @@ struct Runner: @unchecked Sendable {
             let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
             switch outcome {
             case let .completed(result):
-                logIfNonEmpty(label: "stdout", text: result.stdout)
-                logIfNonEmpty(label: "stderr", text: result.stderr)
+                let commandLabel = commandSummary(command)
+                let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
+                let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
+                logIfNonEmpty(label: stdoutLabel, text: result.stdout)
+                logIfNonEmpty(label: stderrLabel, text: result.stderr)
+                logCacheStatusIfPresent(output: result.stdout)
                 return .completed(result)
             case let .failed(error):
                 return .failed(error)
@@ -513,6 +566,42 @@ struct Runner: @unchecked Sendable {
             return
         }
         logLines(logger: vmLogger, "[\(label)] \(text)", level: .info)
+    }
+
+    private func commandSummary(_ command: String) -> String {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+        let firstLine = trimmed.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let compact = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else {
+            return ""
+        }
+        if compact.count > 80 {
+            return String(compact.prefix(77)) + "..."
+        }
+        return compact
+    }
+
+    private func logCacheStatusIfPresent(output: String) {
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let prefixes = [
+            "runner cache hit:",
+            "runner cache miss:",
+            "runner cache populated:"
+        ]
+        for line in output.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                continue
+            }
+            if prefixes.contains(where: { trimmed.hasPrefix($0) }) {
+                logger.info(trimmed)
+            }
+        }
     }
 
     private func logScript(_ script: String) {

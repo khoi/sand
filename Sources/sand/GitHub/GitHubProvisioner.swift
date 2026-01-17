@@ -24,9 +24,12 @@ struct GitHubProvisionerConfig: Decodable {
 }
 
 struct GitHubProvisioner {
-    func script(config: GitHubProvisionerConfig, runnerToken: String) -> [String] {
+    static let runnerCacheMountTag = "actions-runner-cache"
+
+    func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
+        let cacheScript = runnerCacheScript(cacheDirectory: cacheDirectory)
         return [
             """
 os=$(uname -s)
@@ -46,7 +49,7 @@ version="2.330.0"
 asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
 download_url=https://github.com/actions/runner/releases/download/v${version}/${asset}
 echo $download_url
-curl -fsSL -o actions-runner.tar.gz -L ${download_url}
+\(cacheScript)
 """,
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
             "tar xzf ./actions-runner.tar.gz -C ~/actions-runner",
@@ -63,6 +66,32 @@ curl -fsSL -o actions-runner.tar.gz -L ${download_url}
             labels.append(contentsOf: extraLabels)
         }
         return labels.joined(separator: ",")
+    }
+
+    private func runnerCacheScript(cacheDirectory: String?) -> String {
+        guard let cacheDirectory else {
+            return "curl -fsSL -o actions-runner.tar.gz -L ${download_url}"
+        }
+        return """
+cache_dir="\(cacheDirectory)"
+case "$cache_dir" in
+  /*) ;;
+  *) cache_dir="$HOME/$cache_dir" ;;
+esac
+cache_file="${cache_dir}/${asset}"
+if [ -d "$cache_dir" ] && [ -f "$cache_file" ]; then
+  echo "runner cache hit: $cache_file"
+  cp "$cache_file" actions-runner.tar.gz
+else
+  echo "runner cache miss: downloading"
+  curl -fsSL -o actions-runner.tar.gz -L ${download_url}
+  if [ -d "$cache_dir" ] && [ -w "$cache_dir" ]; then
+    tmp_file="${cache_dir}/.${asset}.tmp.$$"
+    cp actions-runner.tar.gz "$tmp_file" && mv "$tmp_file" "$cache_file"
+    echo "runner cache populated: $cache_file"
+  fi
+fi
+"""
     }
 
     private func runnerURL(organization: String, repository: String?) -> String {

@@ -9,6 +9,7 @@ ensure_e2e_deps
 workdir=$(mktemp_dir)
 runner=$(unique_runner_name)
 config="$workdir/config.yml"
+register_e2e_artifacts "$config"
 
 cat >"$config" <<EOF_CONFIG
 runners:
