@@ -6,6 +6,7 @@ struct Runner: @unchecked Sendable {
     let provisioner: GitHubProvisioner
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
+    let control: RunnerControl
     let vmName: String
     private let logger: Logger
     private let vmLogger: Logger
@@ -22,6 +23,7 @@ struct Runner: @unchecked Sendable {
         provisioner: GitHubProvisioner,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
+        control: RunnerControl,
         vmName: String,
         logLabel: String,
         logLevel: LogLevel
@@ -31,6 +33,7 @@ struct Runner: @unchecked Sendable {
         self.provisioner = provisioner
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
+        self.control = control
         self.vmName = vmName
         self.logger = Logger(label: "host.\(logLabel)", minimumLevel: logLevel)
         self.vmLogger = Logger(label: "vm.\(logLabel)", minimumLevel: logLevel)
@@ -156,6 +159,10 @@ struct Runner: @unchecked Sendable {
                 if let runCommand {
                     logScript(runCommand)
                     let handle = try ssh.start(command: runCommand)
+                    control.setProvisioningHandle(handle)
+                    defer {
+                        control.clearProvisioningHandle(handle)
+                    }
                     let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
                     switch outcome {
                     case let .completed(result):
@@ -167,7 +174,7 @@ struct Runner: @unchecked Sendable {
                         }
                         throw error
                     case .healthCheckFailed:
-                        handle.terminate()
+                        control.terminateProvisioning()
                         Task.detached {
                             _ = try? handle.wait()
                         }
