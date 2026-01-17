@@ -176,7 +176,7 @@ wait_for_vm_restarted() {
         fi
         seen_running=1
         ;;
-      missing)
+      present\ false*|missing)
         if [ "$seen_running" -eq 1 ]; then
           seen_missing=1
         fi

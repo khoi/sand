@@ -9,6 +9,7 @@ if [ -z "${SAND_BIN:-}" ]; then
     printf '%s\n' "missing swift in PATH" >&2
     exit 1
   fi
+  swift build >/dev/null
   BIN_PATH=$(swift build --show-bin-path)
   SAND_BIN="$BIN_PATH/sand"
 fi

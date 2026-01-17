@@ -135,12 +135,29 @@ struct Runner: @unchecked Sendable {
                 }
                 logger.info("run script provisioner")
                 logScript(run)
-                let result = try ssh.exec(command: run)
-                if let result {
+                let handle = try ssh.start(command: run)
+                control.setProvisioningHandle(handle)
+                defer {
+                    control.clearProvisioningHandle(handle)
+                }
+                let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
+                switch outcome {
+                case let .completed(result):
                     logIfNonEmpty(label: "stdout", text: result.stdout)
                     logIfNonEmpty(label: "stderr", text: result.stderr)
+                    logger.info("script provisioner finished")
+                case let .failed(error):
+                    if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
+                        return
+                    }
+                    throw error
+                case .healthCheckFailed:
+                    control.terminateProvisioning()
+                    Task.detached {
+                        _ = try? handle.wait()
+                    }
+                    return
                 }
-                logger.info("script provisioner finished")
             case .github:
                 guard let github, let githubConfig = provisionerConfig.github else {
                     throw RunnerError.missingGitHub
