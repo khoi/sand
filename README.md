@@ -22,6 +22,16 @@ sand run --config config.yml
 sand destroy --config config.yml
 ```
 
+## Local test suite
+
+To run the local bash e2e tests (no CI):
+
+```
+./Tests/run
+```
+
+These tests spin up real VMs and require `tart`, `ssh`, and `sshpass` on your machine. See `Tests/README.md` for environment overrides (image, timeout, SSH creds, etc).
+
 ## Start up on boot
 
 To make sand run on boot, u can leverage launchctl as an option
