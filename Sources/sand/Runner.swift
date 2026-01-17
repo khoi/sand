@@ -349,6 +349,7 @@ struct Runner: @unchecked Sendable {
             let startupGrace = max(healthCheck.interval, 10)
             let healthCheckLabel = commandSummary(healthCheck.command)
             let healthCheckDescriptor = healthCheckLabel.isEmpty ? "healthCheck" : "healthCheck (\(healthCheckLabel))"
+            logger.info("healthCheck command: \(healthCheck.command)")
             while !Task.isCancelled {
                 do {
                     let status = try tart.status(name: vmName)
@@ -383,6 +384,9 @@ struct Runner: @unchecked Sendable {
                     if exitCode == 0 {
                         sawSuccess = true
                     } else {
+                        let filteredOutput = stripHealthCheckMarker(output: output)
+                        let outputLabel = healthCheckLabel.isEmpty ? "healthCheck output" : "healthCheck output (\(healthCheckLabel))"
+                        logIfNonEmpty(label: outputLabel, text: filteredOutput)
                         let message = "exit code \(exitCode)"
                         let inStartupGrace = !sawSuccess && Date().timeIntervalSince(activationTime) < startupGrace
                         if inStartupGrace {
@@ -523,6 +527,12 @@ struct Runner: @unchecked Sendable {
         return nil
     }
 
+    private func stripHealthCheckMarker(output: String) -> String {
+        let marker = Runner.healthCheckExitMarker + ":"
+        let lines = output.split(whereSeparator: \.isNewline).filter { !$0.hasPrefix(marker) }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func nanos(from seconds: TimeInterval) -> UInt64 {
         if seconds <= 0 {
             return 0
@@ -535,7 +545,12 @@ struct Runner: @unchecked Sendable {
     }
 
     private func scheduleRestart(reason: RestartReason) {
-        _ = restartBackoff.schedule(reason: reason)
+        let delay = restartBackoff.schedule(reason: reason)
+        if delay > 0 {
+            logger.warning("restart scheduled in \(delay)s (\(reason))")
+        } else {
+            logger.warning("restart scheduled (\(reason))")
+        }
     }
 
     private func applyRestartBackoffIfNeeded() async {
