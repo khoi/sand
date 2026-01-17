@@ -27,6 +27,27 @@ struct SSHClient {
         )
     }
 
+    func start(command: String) throws -> ProcessHandle {
+        let escaped = command.replacingOccurrences(of: "'", with: "'\"'\"'")
+        let remote = "/bin/bash -lc '\(escaped)'"
+        return try processRunner.start(
+            executable: "sshpass",
+            arguments: [
+                "-p", config.password,
+                "ssh",
+                "-o", "PreferredAuthentications=password",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "IdentitiesOnly=yes",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR",
+                "-p", String(config.port),
+                "\(config.user)@\(host)",
+                remote
+            ]
+        )
+    }
+
     func checkConnection() throws {
         _ = try exec(command: "true")
     }

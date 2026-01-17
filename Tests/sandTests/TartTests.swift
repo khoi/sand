@@ -10,6 +10,8 @@ final class MockProcessRunner: ProcessRunning {
 
     var calls: [Call] = []
     var results: [ProcessResult?] = []
+    var startCalls: [Call] = []
+    var startResults: [Result<ProcessResult, Error>] = []
 
     func run(executable: String, arguments: [String], wait: Bool) throws -> ProcessResult? {
         calls.append(Call(executable: executable, arguments: arguments, wait: wait))
@@ -17,6 +19,17 @@ final class MockProcessRunner: ProcessRunning {
             return ProcessResult(stdout: "", stderr: "", exitCode: 0)
         }
         return results.removeFirst()
+    }
+
+    func start(executable: String, arguments: [String]) throws -> ProcessHandle {
+        startCalls.append(Call(executable: executable, arguments: arguments, wait: false))
+        let result = startResults.isEmpty ? .success(ProcessResult(stdout: "", stderr: "", exitCode: 0)) : startResults.removeFirst()
+        return ProcessHandle(
+            wait: {
+                try result.get()
+            },
+            terminate: {}
+        )
     }
 }
 
