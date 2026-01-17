@@ -1,28 +1,3 @@
-struct GitHubRunnerCache: Decodable {
-    let hostPath: String
-    let guestFolder: String
-    let readOnly: Bool
-
-    init(hostPath: String, guestFolder: String, readOnly: Bool = false) {
-        self.hostPath = hostPath
-        self.guestFolder = guestFolder
-        self.readOnly = readOnly
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.hostPath = try container.decode(String.self, forKey: .hostPath)
-        self.guestFolder = try container.decode(String.self, forKey: .guestFolder)
-        self.readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case hostPath
-        case guestFolder
-        case readOnly
-    }
-}
-
 struct GitHubProvisionerConfig: Decodable {
     let appId: Int
     let organization: String
@@ -30,7 +5,6 @@ struct GitHubProvisionerConfig: Decodable {
     let privateKeyPath: String
     let runnerName: String
     let extraLabels: [String]?
-    let runnerCache: GitHubRunnerCache?
 
     init(
         appId: Int,
@@ -38,8 +12,7 @@ struct GitHubProvisionerConfig: Decodable {
         repository: String?,
         privateKeyPath: String,
         runnerName: String,
-        extraLabels: [String]?,
-        runnerCache: GitHubRunnerCache?
+        extraLabels: [String]?
     ) {
         self.appId = appId
         self.organization = organization
@@ -47,15 +20,16 @@ struct GitHubProvisionerConfig: Decodable {
         self.privateKeyPath = privateKeyPath
         self.runnerName = runnerName
         self.extraLabels = extraLabels
-        self.runnerCache = runnerCache
     }
 }
 
 struct GitHubProvisioner {
-    func script(config: GitHubProvisionerConfig, runnerToken: String) -> [String] {
+    static let runnerCacheMountTag = "actions-runner-cache"
+
+    func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
-        let cacheScript = runnerCacheScript(cache: config.runnerCache)
+        let cacheScript = runnerCacheScript(cacheDirectory: cacheDirectory)
         return [
             """
 os=$(uname -s)
@@ -94,13 +68,12 @@ echo $download_url
         return labels.joined(separator: ",")
     }
 
-    private func runnerCacheScript(cache: GitHubRunnerCache?) -> String {
-        guard let cache else {
+    private func runnerCacheScript(cacheDirectory: String?) -> String {
+        guard let cacheDirectory else {
             return "curl -fsSL -o actions-runner.tar.gz -L ${download_url}"
         }
-        let guestFolder = cache.guestFolder
         return """
-cache_dir="\(guestFolder)"
+cache_dir="\(cacheDirectory)"
 case "$cache_dir" in
   /*) ;;
   *) cache_dir="$HOME/$cache_dir" ;;

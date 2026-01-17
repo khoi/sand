@@ -11,8 +11,7 @@ func scriptWithExtraLabels() {
         repository: "repo",
         privateKeyPath: "/tmp/key.pem",
         runnerName: "runner-1",
-        extraLabels: ["fast", "arm64"],
-        runnerCache: nil
+        extraLabels: ["fast", "arm64"]
     )
     let script = provisioner.script(config: config, runnerToken: "token")
     let joined = script.joined(separator: "\n")
@@ -31,8 +30,7 @@ func scriptWithDefaultLabels() {
         repository: nil,
         privateKeyPath: "/tmp/key.pem",
         runnerName: "runner-1",
-        extraLabels: nil,
-        runnerCache: nil
+        extraLabels: nil
     )
     let script = provisioner.script(config: config, runnerToken: "token")
     let joined = script.joined(separator: "\n")
@@ -45,17 +43,15 @@ func scriptWithDefaultLabels() {
 @Test
 func scriptIncludesRunnerCacheLogic() {
     let provisioner = GitHubProvisioner()
-    let cache = GitHubRunnerCache(hostPath: "/tmp/cache", guestFolder: "sand-cache", readOnly: true)
     let config = GitHubProvisionerConfig(
         appId: 1,
         organization: "org",
         repository: "repo",
         privateKeyPath: "/tmp/key.pem",
         runnerName: "runner-1",
-        extraLabels: nil,
-        runnerCache: cache
+        extraLabels: nil
     )
-    let script = provisioner.script(config: config, runnerToken: "token")
+    let script = provisioner.script(config: config, runnerToken: "token", cacheDirectory: "sand-cache")
     let joined = script.joined(separator: "\n")
     #expect(joined.contains("runner cache hit"))
     #expect(joined.contains("runner cache miss"))

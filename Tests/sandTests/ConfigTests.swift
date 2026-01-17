@@ -42,10 +42,6 @@ func parsesConfigAndExpandsPaths() throws {
             privateKeyPath: ~/key.pem
             runnerName: runner-1
             extraLabels: [fast, arm64]
-            runnerCache:
-              hostPath: ~/runner-cache
-              guestFolder: sand-cache
-              readOnly: true
         preRun: |
           echo "pre-run"
         postRun: |
@@ -80,9 +76,6 @@ func parsesConfigAndExpandsPaths() throws {
     #expect(config.runners.first?.provisioner.github?.repository == "repo")
     #expect(config.runners.first?.provisioner.github?.extraLabels ?? [] == ["fast", "arm64"])
     #expect(config.runners.first?.provisioner.github?.privateKeyPath.hasPrefix(home) ?? false)
-    #expect(config.runners.first?.provisioner.github?.runnerCache?.hostPath == "\(home)/runner-cache")
-    #expect(config.runners.first?.provisioner.github?.runnerCache?.guestFolder == "sand-cache")
-    #expect(config.runners.first?.provisioner.github?.runnerCache?.readOnly == true)
     #expect(config.runners.first?.preRun?.contains("pre-run") == true)
     #expect(config.runners.first?.postRun?.contains("post-run") == true)
     #expect(config.runners.first?.healthCheck?.command == "pgrep -f run.sh")

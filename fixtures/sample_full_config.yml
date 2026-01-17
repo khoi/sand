@@ -49,6 +49,11 @@ runners:
         type: oci
         image: "ghcr.io/cirruslabs/ubuntu:latest"
         path: null
+      mounts:
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
       ssh:
         user: admin
         password: admin
@@ -63,10 +68,6 @@ runners:
         privateKeyPath: ~/my-app.private-key.pem
         runnerName: runner-2
         extraLabels: null
-        runnerCache:
-          hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
     healthCheck:
       command: "pgrep -fl /Users/admin/actions-runner/run.sh"
       interval: 30

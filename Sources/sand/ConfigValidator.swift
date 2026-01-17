@@ -53,15 +53,6 @@ final class ConfigValidator {
             if let healthCheck = runner.healthCheck {
                 validateHealthCheck(healthCheck, issues: &runnerIssues)
             }
-            if let runnerCache = runner.provisioner.github?.runnerCache {
-                let guestFolder = runnerCache.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !guestFolder.isEmpty, runner.vm.mounts.contains(where: { $0.guestFolder == guestFolder }) {
-                    runnerIssues.append(.init(
-                        severity: .warning,
-                        message: "vm.mounts already includes guestFolder \(guestFolder); runnerCache auto-mount will be skipped."
-                    ))
-                }
-            }
             issues.append(contentsOf: runnerIssues.map {
                 ConfigValidationIssue(
                     severity: $0.severity,
@@ -169,23 +160,6 @@ final class ConfigValidator {
             }
             if let repository = github.repository, repository.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 issues.append(.init(severity: .warning, message: "provisioner.config.repository is set but empty."))
-            }
-            if let runnerCache = github.runnerCache {
-                let hostPath = runnerCache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
-                if hostPath.isEmpty {
-                    issues.append(.init(severity: .error, message: "provisioner.config.runnerCache.hostPath must not be empty."))
-                } else {
-                    var isDir: ObjCBool = false
-                    if FileManager.default.fileExists(atPath: hostPath, isDirectory: &isDir), !isDir.boolValue {
-                        issues.append(.init(
-                            severity: .error,
-                            message: "provisioner.config.runnerCache.hostPath must be a directory: \(hostPath)."
-                        ))
-                    }
-                }
-                if runnerCache.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    issues.append(.init(severity: .error, message: "provisioner.config.runnerCache.guestFolder must not be empty."))
-                }
             }
         }
     }

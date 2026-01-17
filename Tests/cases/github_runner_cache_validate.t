@@ -24,6 +24,11 @@ runners:
       source:
         type: oci
         image: ${SAND_E2E_IMAGE}
+      mounts:
+        - hostPath: ${cache_dir}
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
     provisioner:
       type: github
       config:
@@ -32,10 +37,6 @@ runners:
         repository: null
         privateKeyPath: ${key_file}
         runnerName: ${runner}
-        runnerCache:
-          hostPath: ${cache_dir}
-          guestFolder: sand-cache
-          readOnly: false
 EOF_CONFIG
 
 output=$("$SAND_BIN" validate --config "$config")

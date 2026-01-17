@@ -79,16 +79,14 @@ struct Runner: @unchecked Sendable {
             shutdownCoordinator.cleanup()
         }
         try applyVMConfigIfNeeded(name: name, vm: vm)
-        var directoryMounts = vm.mounts.map {
+        let runnerCacheDirectory = prepareRunnerCacheDirectory(for: config)
+        let directoryMounts = vm.mounts.map {
             Tart.DirectoryMount(
                 hostPath: $0.hostPath,
                 guestFolder: $0.guestFolder,
                 readOnly: $0.readOnly,
                 tag: $0.tag
             )
-        }
-        if let cacheMount = runnerCacheMount(for: config) {
-            directoryMounts.append(cacheMount)
         }
         let runOptions = Tart.RunOptions(
             directoryMounts: directoryMounts,
@@ -162,7 +160,7 @@ struct Runner: @unchecked Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
-                let commands = provisioner.script(config: githubConfig, runnerToken: token)
+                let commands = provisioner.script(config: githubConfig, runnerToken: token, cacheDirectory: runnerCacheDirectory)
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
                 case .completed:
@@ -229,46 +227,39 @@ struct Runner: @unchecked Sendable {
         )
     }
 
-    private func runnerCacheMount(for config: Config.RunnerConfig) -> Tart.DirectoryMount? {
-        guard config.provisioner.type == .github,
-              let githubConfig = config.provisioner.github,
-              let runnerCache = githubConfig.runnerCache else {
+    private func prepareRunnerCacheDirectory(for config: Config.RunnerConfig) -> String? {
+        guard config.provisioner.type == .github else {
             return nil
         }
-        let guestFolder = runnerCache.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        if guestFolder.isEmpty {
+        let cacheMounts = config.vm.mounts.filter { $0.tag == GitHubProvisioner.runnerCacheMountTag }
+        guard let cacheMount = cacheMounts.first else {
             return nil
         }
-        if config.vm.mounts.contains(where: { $0.guestFolder == guestFolder }) {
-            logger.warning("runnerCache guestFolder \(guestFolder) already mounted; skipping auto-mount")
-            return nil
+        if cacheMounts.count > 1 {
+            logger.warning("multiple vm.mounts entries tagged \(GitHubProvisioner.runnerCacheMountTag); using the first")
         }
-        let hostPath = runnerCache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hostPath.isEmpty {
+        let guestFolder = cacheMount.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostPath = cacheMount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if guestFolder.isEmpty || hostPath.isEmpty {
             return nil
         }
         var isDirectory: ObjCBool = false
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory) {
             if !isDirectory.boolValue {
-                logger.warning("runnerCache hostPath exists but is not a directory: \(hostPath)")
+                logger.warning("runner cache hostPath exists but is not a directory: \(hostPath)")
                 return nil
             }
         } else {
             do {
                 try fileManager.createDirectory(atPath: hostPath, withIntermediateDirectories: true)
             } catch {
-                logger.warning("runnerCache hostPath could not be created at \(hostPath): \(String(describing: error))")
+                logger.warning("runner cache hostPath could not be created at \(hostPath): \(String(describing: error))")
                 return nil
             }
         }
-        logger.info("runner cache enabled: \(hostPath) -> \(guestFolder)")
-        return Tart.DirectoryMount(
-            hostPath: hostPath,
-            guestFolder: guestFolder,
-            readOnly: runnerCache.readOnly,
-            tag: nil
-        )
+        logger.info("runner cache enabled via mount tag \(GitHubProvisioner.runnerCacheMountTag): \(hostPath) -> \(guestFolder)")
+        return guestFolder
     }
 
     private func waitForSSH(ssh: SSHClient) async -> Bool {

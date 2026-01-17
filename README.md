@@ -108,6 +108,11 @@ runners:
       source:
         type: oci
         image: ghcr.io/cirruslabs/macos-runner:tahoe
+      mounts:
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
     provisioner:
       type: github
       config:
@@ -116,17 +121,13 @@ runners:
         repository: my-repo
         privateKeyPath: ~/my-app.private-key.pem
         runnerName: runner-1
-        runnerCache:
-          hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
     healthCheck:
       command: "pgrep -fl /Users/admin/actions-runner/run.sh"
       interval: 30
       delay: 60
 ```
 
-When `runnerCache` is set, sand mounts the host cache directory into the VM and reuses the Actions runner archive between restarts. On a cache miss, the runner tarball is downloaded and stored in the cache for the next run.
+To enable runner caching, add a `vm.mounts` entry tagged `actions-runner-cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory.
 
 ### Custom provisioner script
 
