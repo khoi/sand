@@ -121,6 +121,7 @@ struct Runner: @unchecked Sendable {
             vmName: name,
             ip: ip,
             ssh: vm.ssh,
+            control: control,
             state: healthCheckState
         )
         defer {
@@ -289,6 +290,7 @@ struct Runner: @unchecked Sendable {
         vmName: String,
         ip: String,
         ssh: Config.SSH,
+        control: RunnerControl,
         state: HealthCheckState
     ) -> Task<Void, Never> {
         logger.info("healthCheck starting in \(healthCheck.delay)s")
@@ -310,6 +312,7 @@ struct Runner: @unchecked Sendable {
                     if !running {
                         logger.warning("VM \(vmName) not running, restarting VM")
                         state.markFailed(message: "vm not running")
+                        control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
                         return
                     }
@@ -326,6 +329,7 @@ struct Runner: @unchecked Sendable {
                         let message = "exit code \(exitCode)"
                         logger.warning("healthCheck failed with \(message), restarting VM")
                         state.markFailed(message: message)
+                        control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
                         return
                     }
