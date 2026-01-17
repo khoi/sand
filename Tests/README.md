@@ -1,6 +1,6 @@
 # Local E2E Tests
 
-This directory contains local, bash-based end-to-end tests for the sand CLI. The layout mirrors `khoi/git-wt`:
+This directory contains local, bash-based end-to-end tests for the sand CLI:
 
 - `Tests/run` runs all cases
 - `Tests/lib/common.sh` holds shared helpers
