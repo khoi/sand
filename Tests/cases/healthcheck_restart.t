@@ -84,5 +84,4 @@ while true; do
 done
 
 stop_process "$sand_pid" TERM 20
-"$SAND_BIN" destroy --config "$config" >/dev/null 2>&1 || true
-wait_for_vm_absent "$runner" 180
+wait_for_vm_stopped_or_absent "$runner" 180

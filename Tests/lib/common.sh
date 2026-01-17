@@ -139,6 +139,26 @@ wait_for_vm_absent() {
   done
 }
 
+wait_for_vm_stopped_or_absent() {
+  local name="$1"
+  local timeout="$2"
+  local start
+  start=$(date +%s)
+  while true; do
+    local state
+    state=$(tart_vm_state "$name")
+    if [ "$state" = "missing" ] || [ "$state" = "stopped" ]; then
+      return 0
+    fi
+    local now
+    now=$(date +%s)
+    if [ $((now - start)) -ge "$timeout" ]; then
+      fail "timed out waiting for VM $name to stop or disappear"
+    fi
+    sleep 5
+  done
+}
+
 wait_for_vm_running() {
   local name="$1"
   local timeout="$2"
