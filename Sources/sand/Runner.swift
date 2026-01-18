@@ -384,6 +384,7 @@ struct Runner: @unchecked Sendable {
                             message = "vm running"
                         }
                         logger.warning("VM \(vmName) not running (\(message)), restarting VM")
+                        scheduleRestart(reason: .healthCheckFailed(message))
                         state.markFailed(message: message)
                         control.terminateProvisioning()
                         shutdownCoordinator.cleanup()
@@ -413,6 +414,7 @@ struct Runner: @unchecked Sendable {
                             logger.warning("\(healthCheckDescriptor) failed with \(message) during startup grace, retrying")
                         } else {
                             logger.warning("\(healthCheckDescriptor) failed with \(message), restarting VM")
+                            scheduleRestart(reason: .healthCheckFailed(message))
                             state.markFailed(message: message)
                             control.terminateProvisioning()
                             shutdownCoordinator.cleanup()
