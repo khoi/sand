@@ -4,6 +4,7 @@ enum RestartReason: Equatable, CustomStringConvertible {
     case healthCheckFailed(String)
     case sshNotReady
     case stageFailed(String)
+    case provisionerExited
 
     var description: String {
         switch self {
@@ -13,6 +14,8 @@ enum RestartReason: Equatable, CustomStringConvertible {
             return "ssh not ready"
         case let .stageFailed(stage):
             return "\(stage) failed"
+        case .provisionerExited:
+            return "provisioner exited"
         }
     }
 }

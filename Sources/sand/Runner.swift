@@ -171,7 +171,9 @@ struct Runner: @unchecked Sendable {
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
                 case .completed:
-                    logger.info("github provisioner finished")
+                    logger.warning("github provisioner completed; runner exited, restarting VM")
+                    scheduleRestart(reason: .provisionerExited)
+                    return
                 case let .failed(error):
                     if handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         return
@@ -485,6 +487,11 @@ struct Runner: @unchecked Sendable {
                 logIfNonEmpty(label: stdoutLabel, text: result.stdout)
                 logIfNonEmpty(label: stderrLabel, text: result.stderr)
                 logCacheStatusIfPresent(output: result.stdout)
+                let completionLabel = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
+                logger.info("\(completionLabel) completed with exit code \(result.exitCode)")
+                if isRunnerCommand(command) {
+                    logger.warning("github runner exited with code \(result.exitCode)")
+                }
                 return .completed(result)
             case let .failed(error):
                 return .failed(error)
@@ -639,6 +646,14 @@ struct Runner: @unchecked Sendable {
                 logger.info(trimmed)
             }
         }
+    }
+
+    private func isRunnerCommand(_ command: String) -> Bool {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return false
+        }
+        return trimmed.contains("actions-runner/run.sh")
     }
 
     private func logRunOptions(name: String, options: Tart.RunOptions) {
