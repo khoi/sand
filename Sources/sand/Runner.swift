@@ -653,7 +653,11 @@ struct Runner: @unchecked Sendable {
         guard !trimmed.isEmpty else {
             return false
         }
-        return trimmed.contains("actions-runner/run.sh")
+        let firstToken = trimmed.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+        guard !firstToken.isEmpty else {
+            return false
+        }
+        return firstToken.hasSuffix("actions-runner/run.sh")
     }
 
     private func logRunOptions(name: String, options: Tart.RunOptions) {
