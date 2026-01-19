@@ -524,7 +524,7 @@ struct Runner: @unchecked Sendable {
                     }
                     return .failed(error)
                 case let .healthCheckFailed(message):
-                    logger.debug("provisioner command aborted due to healthCheck failure: \(message)")
+                    logger.warning("healthCheck failed; terminating provisioner command wait: \(message)")
                     control.terminateProvisioning()
                     Task.detached {
                         _ = try? handle.wait()
@@ -547,7 +547,7 @@ struct Runner: @unchecked Sendable {
         await withTaskGroup(of: ProvisionerOutcome?.self) { group in
             group.addTask {
                 do {
-                    let result = try handle.wait()
+                    let result = try await handle.waitAsync()
                     return .completed(result)
                 } catch {
                     return .failed(error)

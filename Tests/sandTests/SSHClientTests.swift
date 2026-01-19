@@ -18,7 +18,11 @@ final class SSHProcessRunner: ProcessRunning {
 
     func start(executable: String, arguments: [String]) throws -> ProcessHandle {
         startCalls.append(Call(executable: executable, arguments: arguments, wait: false))
-        return ProcessHandle(wait: { ProcessResult(stdout: "", stderr: "", exitCode: 0) }, terminate: {})
+        return ProcessHandle(
+            wait: { ProcessResult(stdout: "", stderr: "", exitCode: 0) },
+            waitAsync: { ProcessResult(stdout: "", stderr: "", exitCode: 0) },
+            terminate: {}
+        )
     }
 }
 

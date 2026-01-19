@@ -28,6 +28,9 @@ final class MockProcessRunner: ProcessRunning {
             wait: {
                 try result.get()
             },
+            waitAsync: {
+                try result.get()
+            },
             terminate: {}
         )
     }
