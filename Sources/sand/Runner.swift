@@ -58,6 +58,8 @@ struct Runner: @unchecked Sendable {
     }
 
     private func runOnce() async throws {
+        let stopAfterLabel = config.stopAfter.map(String.init) ?? "nil"
+        logger.debug("runOnce start (vm=\(vmName), stopAfter=\(stopAfterLabel))")
         await applyRestartBackoffIfNeeded()
         let name = vmName
         let vm = config.vm
@@ -109,6 +111,7 @@ struct Runner: @unchecked Sendable {
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {
+            logger.debug("waitForSSH failed; scheduling restart")
             scheduleRestart(reason: .sshNotReady)
             return
         }
@@ -130,6 +133,7 @@ struct Runner: @unchecked Sendable {
             }
         }
         let healthCheckState = HealthCheckState()
+        logger.debug("healthCheck task preparing (vm=\(name))")
         let healthCheckTask = startHealthCheck(
             healthCheck: config.healthCheck ?? .standard,
             vmName: name,
@@ -139,6 +143,7 @@ struct Runner: @unchecked Sendable {
         )
         control.setHealthCheckTask(healthCheckTask)
         defer {
+            logger.debug("healthCheck task cancel requested")
             healthCheckTask.cancel()
             control.clearHealthCheckTask()
         }
@@ -213,6 +218,7 @@ struct Runner: @unchecked Sendable {
             return
         }
         restartBackoff.reset()
+        logger.debug("runOnce complete (vm=\(vmName))")
     }
 
     private func applyVMConfigIfNeeded(name: String, vm: Config.VM) throws {
@@ -276,6 +282,7 @@ struct Runner: @unchecked Sendable {
         var attempt = 0
         var stoppedChecks = 0
         let maxRetries = ssh.config.connectMaxRetries
+        logger.debug("waitForSSH start (vm=\(vmName), maxRetries=\(maxRetries.map(String.init) ?? "nil"))")
         while true {
             if let maxRetries, attempt >= maxRetries {
                 logger.warning("SSH not ready after \(maxRetries) attempts, restarting VM")
@@ -284,6 +291,7 @@ struct Runner: @unchecked Sendable {
             attempt += 1
             do {
                 let status = try tart.status(name: vmName)
+                logger.debug("waitForSSH attempt \(attempt): VM status \(statusLabel(status))")
                 if status != .running {
                     let reason = status == .missing ? "missing" : "stopped"
                     if status == .missing {
@@ -306,6 +314,7 @@ struct Runner: @unchecked Sendable {
                 logger.info("SSH ready after \(attempt) attempt(s)")
                 return true
             } catch {
+                logger.debug("SSH checkConnection failed (attempt \(attempt)): \(String(describing: error))")
                 if let maxRetries {
                     logger.info("SSH not ready, retrying in 1s (attempt \(attempt)/\(maxRetries))")
                 } else {
@@ -360,10 +369,12 @@ struct Runner: @unchecked Sendable {
                 do {
                     try await Task.sleep(nanoseconds: nanos(from: healthCheck.delay))
                 } catch {
+                    self.logger.debug("healthCheck delay sleep cancelled")
                     return
                 }
             }
             guard !Task.isCancelled else {
+                self.logger.debug("healthCheck task cancelled before activation")
                 return
             }
             logger.info("healthCheck active (interval: \(healthCheck.interval)s)")
@@ -374,8 +385,10 @@ struct Runner: @unchecked Sendable {
             let healthCheckDescriptor = healthCheckLabel.isEmpty ? "healthCheck" : "healthCheck (\(healthCheckLabel))"
             logger.info("healthCheck command: \(healthCheck.command)")
             while !Task.isCancelled {
+                self.logger.debug("healthCheck tick (vm=\(vmName))")
                 do {
                     let status = try tart.status(name: vmName)
+                    self.logger.debug("healthCheck VM status: \(statusLabel(status))")
                     if status != .running {
                         let message: String
                         switch status {
@@ -398,15 +411,19 @@ struct Runner: @unchecked Sendable {
                 }
                 do {
                     guard let ip = resolveHealthCheckIP(name: vmName, interval: healthCheck.interval) else {
+                        self.logger.debug("healthCheck failed to resolve IP; retrying")
                         continue
                     }
+                    self.logger.debug("healthCheck resolved IP: \(ip)")
                     let probe = SSHClient(processRunner: tart.processRunner, host: ip, config: ssh)
                     let probeCommand = wrapHealthCheckCommand(healthCheck.command)
                     let result = try probe.exec(command: probeCommand)
                     let output = result?.stdout ?? ""
                     let exitCode = parseHealthCheckExitCode(output: output) ?? 1
+                    self.logger.debug("healthCheck exit code \(exitCode)")
                     if exitCode == 0 {
                         sawSuccess = true
+                        self.logger.debug("healthCheck success")
                     } else {
                         let filteredOutput = stripHealthCheckMarker(output: output)
                         let outputLabel = healthCheckLabel.isEmpty ? "healthCheck output" : "healthCheck output (\(healthCheckLabel))"
@@ -430,9 +447,11 @@ struct Runner: @unchecked Sendable {
                 do {
                     try await Task.sleep(nanoseconds: nanos(from: healthCheck.interval))
                 } catch {
+                    self.logger.debug("healthCheck interval sleep cancelled")
                     return
                 }
             }
+            self.logger.debug("healthCheck task cancelled (vm=\(vmName))")
         }
     }
 
@@ -476,15 +495,18 @@ struct Runner: @unchecked Sendable {
         var attempt = 0
         while true {
             do {
+                let commandLabel = commandSummary(command)
+                let labeledCommand = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
+                logger.debug("\(labeledCommand) starting (attempt \(attempt + 1))")
                 let handle = try ssh.start(command: command)
                 control.setProvisioningHandle(handle)
                 defer {
                     control.clearProvisioningHandle(handle)
                 }
+                logger.debug("\(labeledCommand) started; awaiting completion or healthCheck failure")
                 let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
                 switch outcome {
                 case let .completed(result):
-                    let commandLabel = commandSummary(command)
                     let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
                     let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
                     logIfNonEmpty(label: stdoutLabel, text: result.stdout)
@@ -502,6 +524,7 @@ struct Runner: @unchecked Sendable {
                     }
                     return .failed(error)
                 case let .healthCheckFailed(message):
+                    logger.debug("provisioner command aborted due to healthCheck failure: \(message)")
                     control.terminateProvisioning()
                     Task.detached {
                         _ = try? handle.wait()
@@ -542,6 +565,7 @@ struct Runner: @unchecked Sendable {
             }
             while let outcome = await group.next() {
                 if let outcome {
+                    logger.debug("provisioner outcome received: \(provisionerOutcomeLabel(outcome))")
                     group.cancelAll()
                     return outcome
                 }
@@ -633,7 +657,9 @@ struct Runner: @unchecked Sendable {
     }
 
     private func scheduleRestart(reason: RestartReason) {
+        logger.debug("restart requested (\(reason))")
         let delay = restartBackoff.schedule(reason: reason)
+        logger.debug("restart backoff state: \(restartBackoff.snapshot())")
         if delay > 0 {
             logger.warning("restart scheduled in \(delay)s (\(reason))")
         } else {
@@ -644,7 +670,13 @@ struct Runner: @unchecked Sendable {
     private func applyRestartBackoffIfNeeded() async {
         let (delay, reason) = restartBackoff.takePending()
         guard delay > 0 else {
+            logger.debug("restart backoff: none pending")
             return
+        }
+        if let reason {
+            logger.debug("restart backoff pending \(delay)s (\(reason))")
+        } else {
+            logger.debug("restart backoff pending \(delay)s (no reason)")
         }
         if let reason {
             logger.warning("restart backoff \(delay)s (\(reason))")
@@ -765,11 +797,13 @@ struct Runner: @unchecked Sendable {
 
     private func handleStageFailure(_ error: Error, stage: String, healthCheckState: HealthCheckState?) -> Bool {
         if let message = healthCheckState?.failureMessage {
+            logger.debug("\(stage) failed while healthCheck already failed: \(message)")
             scheduleRestart(reason: .healthCheckFailed(message))
             return true
         }
         logStageFailure(error, stage: stage)
         guard config.stopAfter == nil else {
+            logger.debug("\(stage) failed; stopAfter set, not restarting")
             return false
         }
         logger.warning("\(stage) failed, restarting VM")
@@ -791,6 +825,17 @@ struct Runner: @unchecked Sendable {
             return
         }
         logger.error("\(stage) failed: \(String(describing: error))")
+    }
+
+    private func provisionerOutcomeLabel(_ outcome: ProvisionerOutcome) -> String {
+        switch outcome {
+        case .completed:
+            return "completed"
+        case .failed:
+            return "failed"
+        case .healthCheckFailed:
+            return "healthCheckFailed"
+        }
     }
 }
 
