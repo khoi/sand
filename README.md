@@ -133,7 +133,16 @@ runners:
       delay: 60
 ```
 
-To enable runner caching, add a `vm.mounts` entry tagged `actions-runner-cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<guestFolder>` (with `guestFolder` acting as the share name). If the mount is read-only, cache misses will still download but the archive won’t be persisted.
+To enable runner caching, add a `vm.mounts` entry tagged `actions-runner-cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<guestFolder>` (with `guestFolder` acting as the share name). On Linux guests, directory shares are not auto-mounted; you must mount the virtiofs tag and ensure the cache is available at `~/sand-cache` before the provisioner runs. If the mount is read-only, cache misses will still download but the archive won’t be persisted.
+
+Linux cache mount example:
+```
+    preRun: |
+      sudo mkdir -p /mnt/virtiofs
+      sudo mount -t virtiofs actions-runner-cache /mnt/virtiofs
+      mkdir -p ~/sand-cache
+      sudo mount --bind /mnt/virtiofs/sand-cache ~/sand-cache
+```
 
 Common pitfalls:
 - `readOnly: true` on the cache mount prevents cache population on misses.
