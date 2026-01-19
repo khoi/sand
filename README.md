@@ -119,6 +119,28 @@ runners:
           guestFolder: sand-cache
           readOnly: false
           tag: actions-runner-cache
+    provisioner:
+      type: github
+      config:
+        appId: 123456
+        organization: my-org
+        repository: my-repo
+        privateKeyPath: ~/my-app.private-key.pem
+        runnerName: runner-1
+    healthCheck:
+      command: "pgrep -fl /Users/admin/actions-runner/run.sh"
+      interval: 30
+      delay: 60
+  - name: runner-2
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/cirruslabs/ubuntu:latest
+      mounts:
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
     preRun: | # runs before provisioner (Linux cache mount)
       sudo mkdir -p /mnt/virtiofs # virtiofs mountpoint
       sudo mount -t virtiofs actions-runner-cache /mnt/virtiofs # mount tag
@@ -133,9 +155,9 @@ runners:
         organization: my-org
         repository: my-repo
         privateKeyPath: ~/my-app.private-key.pem
-        runnerName: runner-1
+        runnerName: runner-2
     healthCheck:
-      command: "pgrep -fl /Users/admin/actions-runner/run.sh"
+      command: "pgrep -fl Runner.Listener"
       interval: 30
       delay: 60
 ```
