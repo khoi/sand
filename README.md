@@ -100,6 +100,12 @@ sand run --config config.yml --log-file /tmp/sand.log
 
 Create a `config.yml` and run the CLI with `--config`. 
 
+### GitHub Actions setup
+
+1) Create a GitHub App and grant `Self-hosted runners` permission set to `Read & Write` at the organization level. https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
+2) Install the app on the organization or the specific repository you want to run against.
+3) Download the private key and set `appId`, `organization`, `repository` (optional), and `privateKeyPath` in your config.
+
 ### GitHub Actions runner provisioner
 ```
 runners:
