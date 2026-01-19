@@ -785,9 +785,6 @@ struct Runner: @unchecked Sendable {
     }
 
     private func resolvedMountTag(for mount: Config.DirectoryMount) -> String? {
-        if mount.tag == GitHubProvisioner.runnerCacheMountTag {
-            return nil
-        }
         return mount.tag
     }
 
