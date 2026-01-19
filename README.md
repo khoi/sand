@@ -119,13 +119,13 @@ runners:
           guestFolder: sand-cache
           readOnly: false
           tag: actions-runner-cache
-      # Linux guests: mount virtiofs tag before provisioner so cache is at ~/sand-cache.
-      # Example:
-      # preRun: |
-      #   sudo mkdir -p /mnt/virtiofs
-      #   sudo mount -t virtiofs actions-runner-cache /mnt/virtiofs
-      #   mkdir -p ~/sand-cache
-      #   sudo mount --bind /mnt/virtiofs/sand-cache ~/sand-cache
+    preRun: | # runs before provisioner (Linux cache mount)
+      sudo mkdir -p /mnt/virtiofs # virtiofs mountpoint
+      sudo mount -t virtiofs actions-runner-cache /mnt/virtiofs # mount tag
+      mkdir -p ~/sand-cache # expected cache path
+      sudo mount --bind /mnt/virtiofs/sand-cache ~/sand-cache # bind to expected path
+    postRun: | # runs after provisioner
+      echo "post-run hook complete"
     provisioner:
       type: github
       config:
@@ -169,27 +169,6 @@ runners:
           echo "Hello World" && sleep 10
     healthCheck:
       command: "true"
-```
-
-### Pre/Post run hooks
-
-`preRun` and `postRun` execute commands over SSH inside the VM before and after the provisioner runs. If a command exits non-zero, the run fails.
-
-```
-runners:
-  - name: runner-1
-    vm:
-      source:
-        type: oci
-        image: "ghcr.io/cirruslabs/ubuntu:latest"
-    provisioner:
-      type: script
-      config:
-        run: echo "provision"
-    preRun: |
-      echo "before provisioner"
-    postRun: |
-      echo "after provisioner"
 ```
 
 If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
