@@ -23,6 +23,7 @@ struct Run: AsyncParsableCommand {
         let level = logLevel.resolvedLevel()
         let logSink = try logLevel.makeLogFileSink()
         let logger = Logger(label: "sand", minimumLevel: level, sink: logSink)
+        logger.info("=== sand run start ===")
         let requiredDependencies = dryRun ? ["tart"] : ["tart", "sshpass", "ssh"]
         let missing = DependencyChecker.missingCommands(requiredDependencies)
         if !missing.isEmpty {

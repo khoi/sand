@@ -11,6 +11,7 @@ struct Runner: @unchecked Sendable {
     private let logger: Logger
     private let vmLogger: Logger
     private let restartBackoff = RestartBackoff()
+    private let sshRetryDelays: [TimeInterval] = [1, 2, 4, 8, 16, 30, 30, 30, 30, 30]
     private static let healthCheckExitMarker = "__SAND_HEALTHCHECK_EXIT_CODE__"
 
     enum RunnerError: Error {
@@ -115,7 +116,7 @@ struct Runner: @unchecked Sendable {
             logger.info("run preRun")
             logScript(preRun)
             do {
-                let result = try ssh.exec(command: preRun)
+                let result = try await execWithRetry(command: preRun, ssh: ssh, stage: "preRun")
                 if let result {
                     logIfNonEmpty(label: "stdout", text: result.stdout)
                     logIfNonEmpty(label: "stderr", text: result.stderr)
@@ -194,7 +195,7 @@ struct Runner: @unchecked Sendable {
             logger.info("run postRun")
             logScript(postRun)
             do {
-                let result = try ssh.exec(command: postRun)
+                let result = try await execWithRetry(command: postRun, ssh: ssh, stage: "postRun")
                 if let result {
                     logIfNonEmpty(label: "stdout", text: result.stdout)
                     logIfNonEmpty(label: "stderr", text: result.stderr)
@@ -472,38 +473,47 @@ struct Runner: @unchecked Sendable {
         healthCheckState: HealthCheckState
     ) async -> ProvisionerOutcome {
         logScript(command)
-        do {
-            let handle = try ssh.start(command: command)
-            control.setProvisioningHandle(handle)
-            defer {
-                control.clearProvisioningHandle(handle)
-            }
-            let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
-            switch outcome {
-            case let .completed(result):
-                let commandLabel = commandSummary(command)
-                let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
-                let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
-                logIfNonEmpty(label: stdoutLabel, text: result.stdout)
-                logIfNonEmpty(label: stderrLabel, text: result.stderr)
-                logCacheStatusIfPresent(output: result.stdout)
-                let completionLabel = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
-                logger.info("\(completionLabel) completed with exit code \(result.exitCode)")
-                if isRunnerCommand(command) {
-                    logger.warning("github runner exited with code \(result.exitCode)")
+        var attempt = 0
+        while true {
+            do {
+                let handle = try ssh.start(command: command)
+                control.setProvisioningHandle(handle)
+                defer {
+                    control.clearProvisioningHandle(handle)
                 }
-                return .completed(result)
-            case let .failed(error):
+                let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
+                switch outcome {
+                case let .completed(result):
+                    let commandLabel = commandSummary(command)
+                    let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
+                    let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
+                    logIfNonEmpty(label: stdoutLabel, text: result.stdout)
+                    logIfNonEmpty(label: stderrLabel, text: result.stderr)
+                    logCacheStatusIfPresent(output: result.stdout)
+                    let completionLabel = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
+                    logger.info("\(completionLabel) completed with exit code \(result.exitCode)")
+                    if isRunnerCommand(command) {
+                        logger.warning("github runner exited with code \(result.exitCode)")
+                    }
+                    return .completed(result)
+                case let .failed(error):
+                    if await retrySSHIfNeeded(error: error, stage: "provisioner", attempt: &attempt) {
+                        continue
+                    }
+                    return .failed(error)
+                case let .healthCheckFailed(message):
+                    control.terminateProvisioning()
+                    Task.detached {
+                        _ = try? handle.wait()
+                    }
+                    return .healthCheckFailed(message)
+                }
+            } catch {
+                if await retrySSHIfNeeded(error: error, stage: "provisioner", attempt: &attempt) {
+                    continue
+                }
                 return .failed(error)
-            case let .healthCheckFailed(message):
-                control.terminateProvisioning()
-                Task.detached {
-                    _ = try? handle.wait()
-                }
-                return .healthCheckFailed(message)
             }
-        } catch {
-            return .failed(error)
         }
     }
 
@@ -571,6 +581,55 @@ struct Runner: @unchecked Sendable {
             return UInt64.max
         }
         return UInt64(nanos)
+    }
+
+    private func execWithRetry(command: String, ssh: SSHClient, stage: String) async throws -> ProcessResult? {
+        var attempt = 0
+        while true {
+            do {
+                return try ssh.exec(command: command)
+            } catch {
+                if await retrySSHIfNeeded(error: error, stage: stage, attempt: &attempt) {
+                    continue
+                }
+                throw error
+            }
+        }
+    }
+
+    private func retrySSHIfNeeded(error: Error, stage: String, attempt: inout Int) async -> Bool {
+        guard shouldRetrySSH(error), attempt < sshRetryDelays.count else {
+            return false
+        }
+        let delay = sshRetryDelays[attempt]
+        attempt += 1
+        let attemptLabel = "\(attempt)/\(sshRetryDelays.count)"
+        if delay > 0 {
+            logger.warning("SSH failed during \(stage), retrying in \(delay)s (attempt \(attemptLabel))")
+        } else {
+            logger.warning("SSH failed during \(stage), retrying (attempt \(attemptLabel))")
+        }
+        do {
+            try await Task.sleep(nanoseconds: nanos(from: delay))
+        } catch {
+            return false
+        }
+        return true
+    }
+
+    private func shouldRetrySSH(_ error: Error) -> Bool {
+        guard let runnerError = error as? ProcessRunnerError else {
+            return false
+        }
+        switch runnerError {
+        case let .failed(exitCode, _, _, command):
+            guard exitCode == 255 else {
+                return false
+            }
+            return command.first == "sshpass"
+        case .invalidCommand:
+            return false
+        }
     }
 
     private func scheduleRestart(reason: RestartReason) {
