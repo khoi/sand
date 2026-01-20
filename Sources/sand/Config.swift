@@ -1,10 +1,10 @@
 import Foundation
 import Yams
 
-struct Config: Decodable {
+struct Config: Decodable, Sendable {
     static let defaultPath = "sand.yml"
 
-    struct VM: Decodable {
+    struct VM: Decodable, Sendable {
         let source: VMSource
         let hardware: Hardware?
         let mounts: [DirectoryMount]
@@ -41,8 +41,8 @@ struct Config: Decodable {
         }
     }
 
-    struct VMSource: Decodable {
-        enum SourceType: String, Decodable {
+    struct VMSource: Decodable, Sendable {
+        enum SourceType: String, Decodable, Sendable {
             case oci
             case local
         }
@@ -91,15 +91,15 @@ struct Config: Decodable {
         }
     }
 
-    struct Hardware: Decodable {
+    struct Hardware: Decodable, Sendable {
         let ramGb: Int?
         let cpuCores: Int?
         let display: Display?
         let audio: Bool?
     }
 
-    struct Display: Decodable {
-        enum Unit: String, Decodable {
+    struct Display: Decodable, Sendable {
+        enum Unit: String, Decodable, Sendable {
             case pt
             case px
         }
@@ -110,7 +110,7 @@ struct Config: Decodable {
         let refit: Bool?
     }
 
-    struct DirectoryMount: Decodable {
+    struct DirectoryMount: Decodable, Sendable {
         let hostPath: String
         let guestFolder: String
         let readOnly: Bool
@@ -139,7 +139,7 @@ struct Config: Decodable {
         }
     }
 
-    struct RunOptions: Decodable {
+    struct RunOptions: Decodable, Sendable {
         let noGraphics: Bool
         let noClipboard: Bool
 
@@ -162,7 +162,7 @@ struct Config: Decodable {
         }
     }
 
-    struct SSH: Decodable {
+    struct SSH: Decodable, Sendable {
         let user: String
         let password: String
         let port: Int
@@ -192,7 +192,7 @@ struct Config: Decodable {
         }
     }
 
-    struct HealthCheck: Decodable {
+    struct HealthCheck: Decodable, Sendable {
         static let defaultCommand = "echo healthcheck"
         static let standard = HealthCheck(command: defaultCommand)
         private static let defaultInterval: TimeInterval = 30
@@ -226,13 +226,13 @@ struct Config: Decodable {
         }
     }
 
-    struct Provisioner: Decodable {
-        enum ProvisionerType: String, Decodable {
+    struct Provisioner: Decodable, Sendable {
+        enum ProvisionerType: String, Decodable, Sendable {
             case script
             case github
         }
 
-        struct Script: Decodable {
+        struct Script: Decodable, Sendable {
             let run: String
         }
 
@@ -267,7 +267,7 @@ struct Config: Decodable {
         }
     }
 
-    struct RunnerConfig: Decodable {
+    struct RunnerConfig: Decodable, Sendable {
         let name: String
         let vm: VM
         let provisioner: Provisioner

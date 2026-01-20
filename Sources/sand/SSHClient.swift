@@ -5,10 +5,10 @@ struct SSHClient {
     let host: String
     let config: Config.SSH
 
-    func exec(command: String) throws -> ProcessResult? {
+    func exec(command: String) async throws -> ProcessResult? {
         let escaped = command.replacingOccurrences(of: "'", with: "'\"'\"'")
         let remote = "/bin/bash -lc '\(escaped)'"
-        return try processRunner.run(
+        return try await processRunner.run(
             executable: "sshpass",
             arguments: [
                 "-p", config.password,
@@ -48,7 +48,7 @@ struct SSHClient {
         )
     }
 
-    func checkConnection() throws {
-        _ = try exec(command: "true")
+    func checkConnection() async throws {
+        _ = try await exec(command: "true")
     }
 }

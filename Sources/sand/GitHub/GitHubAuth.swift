@@ -1,7 +1,7 @@
 import Foundation
 import SwiftJWT
 
-struct GitHubClaims: Claims {
+struct GitHubClaims: Claims, Sendable {
     let iss: String
     let iat: Date
     let exp: Date
@@ -17,11 +17,11 @@ struct GitHubClaims: Claims {
     }
 }
 
-protocol GitHubAuthenticating {
+protocol GitHubAuthenticating: Sendable {
     func token(now: Date) throws -> String
 }
 
-struct GitHubAuth: GitHubAuthenticating {
+struct GitHubAuth: GitHubAuthenticating, Sendable {
     let appId: Int
     let privateKey: Data
 

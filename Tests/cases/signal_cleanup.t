@@ -45,6 +45,7 @@ runners:
       delay: 1
 EOF_CONFIG
 
+  register_e2e_artifacts "$config_path" "$log"
   sand_pid=$(start_sand_run "$config_path" "$log")
   wait_for_vm_running "$runner" 180
 

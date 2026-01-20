@@ -1,7 +1,7 @@
 import ArgumentParser
 import os
 
-enum LogLevel: String, ExpressibleByArgument, CaseIterable, Comparable {
+enum LogLevel: String, ExpressibleByArgument, CaseIterable, Comparable, Sendable {
     case trace
     case debug
     case info
@@ -34,7 +34,7 @@ enum LogLevel: String, ExpressibleByArgument, CaseIterable, Comparable {
     }
 }
 
-struct Logger {
+struct Logger: Sendable {
     private let logger: os.Logger
     private let minimumLevel: LogLevel
     private let fileSink: LogFileSink?
@@ -95,6 +95,6 @@ struct Logger {
         case .critical:
             logger.fault("\(message, privacy: .public)")
         }
-        fileSink?.write(level: level, label: label, message: message)
+        fileSink?.writeSync(level: level, label: label, message: message)
     }
 }

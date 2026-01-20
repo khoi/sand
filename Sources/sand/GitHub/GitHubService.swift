@@ -1,6 +1,6 @@
 import Foundation
 
-protocol URLSessionProtocol {
+protocol URLSessionProtocol: Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
 
@@ -11,7 +11,7 @@ enum GitHubServiceError: Error {
     case httpError(status: Int, body: String)
 }
 
-struct GitHubService {
+struct GitHubService: Sendable {
     struct InstallationResponse: Decodable {
         let id: Int
     }

@@ -4,7 +4,7 @@ enum TartError: Error {
     case emptyIP
 }
 
-struct Tart {
+struct Tart: Sendable {
     enum VMStatus {
         case missing
         case stopped
@@ -59,21 +59,21 @@ struct Tart {
         self.logger = logger
     }
 
-    func prepare(source: String) throws {
+    func prepare(source: String) async throws {
         if isOCISource(source) {
-            if try hasOCI(source: source) {
+            if try await hasOCI(source: source) {
                 return
             }
-            try pull(source: source)
+            try await pull(source: source)
         }
     }
 
-    func pull(source: String) throws {
-        _ = try run(arguments: ["pull", source], wait: true)
+    func pull(source: String) async throws {
+        _ = try await run(arguments: ["pull", source], wait: true)
     }
 
-    func clone(source: String, name: String) throws {
-        _ = try run(arguments: ["clone", source, name], wait: true)
+    func clone(source: String, name: String) async throws {
+        _ = try await run(arguments: ["clone", source, name], wait: true)
     }
 
     func set(
@@ -83,7 +83,7 @@ struct Tart {
         display: Display?,
         displayRefit: Bool?,
         diskSizeGb: Int?
-    ) throws {
+    ) async throws {
         var arguments = ["set", name]
         if let cpuCores {
             arguments.append(contentsOf: ["--cpu", String(cpuCores)])
@@ -103,10 +103,10 @@ struct Tart {
         guard arguments.count > 2 else {
             return
         }
-        _ = try run(arguments: arguments, wait: true)
+        _ = try await run(arguments: arguments, wait: true)
     }
 
-    func run(name: String, options: RunOptions = .default) throws {
+    func run(name: String, options: RunOptions = .default) async throws {
         var arguments = ["run", name]
         if options.noGraphics {
             arguments.append("--no-graphics")
@@ -121,11 +121,11 @@ struct Tart {
             arguments.append("--dir")
             arguments.append(mount.runArgument)
         }
-        _ = try run(arguments: arguments, wait: false)
+        _ = try await run(arguments: arguments, wait: false)
     }
 
-    func ip(name: String, wait: Int) throws -> String {
-        let result = try run(arguments: ["ip", name, "--wait", String(wait)], wait: true)
+    func ip(name: String, wait: Int) async throws -> String {
+        let result = try await run(arguments: ["ip", name, "--wait", String(wait)], wait: true)
         let value = result?.stdout.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if value.isEmpty {
             throw TartError.emptyIP
@@ -133,24 +133,24 @@ struct Tart {
         return value
     }
 
-    func stop(name: String, timeout: Int? = nil) throws {
+    func stop(name: String, timeout: Int? = nil) async throws {
         var arguments = ["stop", name]
         if let timeout {
             arguments.append(contentsOf: ["--timeout", String(timeout)])
         }
-        _ = try run(arguments: arguments, wait: true)
+        _ = try await run(arguments: arguments, wait: true)
     }
 
-    func delete(name: String) throws {
-        _ = try run(arguments: ["delete", name], wait: true)
+    func delete(name: String) async throws {
+        _ = try await run(arguments: ["delete", name], wait: true)
     }
 
-    func isRunning(name: String) throws -> Bool {
-        return try status(name: name) == .running
+    func isRunning(name: String) async throws -> Bool {
+        return try await status(name: name) == .running
     }
 
-    func status(name: String) throws -> VMStatus {
-        let result = try run(arguments: ["list", "--format", "json"], wait: true)
+    func status(name: String) async throws -> VMStatus {
+        let result = try await run(arguments: ["list", "--format", "json"], wait: true)
         let output = result?.stdout ?? ""
         guard let entry = entryFromJSON(output: output, name: name) else {
             return .missing
@@ -168,8 +168,8 @@ struct Tart {
         return true
     }
 
-    private func hasOCI(source: String) throws -> Bool {
-        let result = try run(arguments: ["list", "--source", "oci", "--quiet"], wait: true)
+    private func hasOCI(source: String) async throws -> Bool {
+        let result = try await run(arguments: ["list", "--source", "oci", "--quiet"], wait: true)
         let output = result?.stdout ?? ""
         let expected = normalizeOCI(source)
         return output
@@ -207,8 +207,8 @@ struct Tart {
     }
 
 
-    private func run(arguments: [String], wait: Bool) throws -> ProcessResult? {
+    private func run(arguments: [String], wait: Bool) async throws -> ProcessResult? {
         logger.debug("tart \(arguments.joined(separator: " "))")
-        return try processRunner.run(executable: "tart", arguments: arguments, wait: wait)
+        return try await processRunner.run(executable: "tart", arguments: arguments, wait: wait)
     }
 }

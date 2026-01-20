@@ -4,8 +4,7 @@ enum LogFileError: Error {
     case openFailed(String)
 }
 
-final class LogFileSink: @unchecked Sendable {
-    private let lock = NSLock()
+actor LogFileSink {
     private let handle: FileHandle
     private let dateFormatter: ISO8601DateFormatter
 
@@ -32,14 +31,21 @@ final class LogFileSink: @unchecked Sendable {
     }
 
     func write(level: LogLevel, label: String, message: String) {
-        let timestamp = dateFormatter.string(from: Date())
         let normalized = message.replacingOccurrences(of: "\n", with: "\\n")
+        let timestamp = dateFormatter.string(from: Date())
         let line = "\(timestamp) [\(level.rawValue)] \(label) \(normalized)\n"
         guard let data = line.data(using: .utf8) else {
             return
         }
-        lock.lock()
         handle.write(data)
-        lock.unlock()
+    }
+
+    nonisolated func writeSync(level: LogLevel, label: String, message: String) {
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            await self.write(level: level, label: label, message: message)
+            semaphore.signal()
+        }
+        semaphore.wait()
     }
 }

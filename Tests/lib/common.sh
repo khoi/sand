@@ -95,7 +95,7 @@ e2e_diagnostics() {
     printf '[config]\n' >&2
     cat "$SAND_E2E_CONFIG" >&2
   fi
-  printf '---- end diagnostics ----\n' >&2
+  printf '%s\n' '---- end diagnostics ----' >&2
   set -e
 }
 
@@ -330,8 +330,10 @@ start_sand_run() {
   local log="$2"
   shift 2
   register_e2e_artifacts "$config" "$log"
+  export SAND_E2E_LOG="$log"
+  export SAND_E2E_CONFIG="$config"
   : >"$log"
-  "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
+  SAND_LOG_FILE="$log" "$SAND_BIN" run --config "$config" "$@" >"$log" 2>&1 &
   echo $!
 }
 

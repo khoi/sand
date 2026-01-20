@@ -1,14 +1,14 @@
 import Foundation
-import Testing
+import XCTest
 @testable import sand
 
-final class MockAuth: GitHubAuthenticating {
+final class MockAuth: GitHubAuthenticating, @unchecked Sendable {
     func token(now: Date) throws -> String {
         return "jwt"
     }
 }
 
-final class MockSession: URLSessionProtocol {
+final class MockSession: URLSessionProtocol, @unchecked Sendable {
     var responses: [String: (Data, Int)] = [:]
     var requests: [URLRequest] = []
 
@@ -24,18 +24,19 @@ final class MockSession: URLSessionProtocol {
     }
 }
 
-@Test
-func repoLevelPaths() async throws {
-    let session = MockSession()
-    session.responses["/repos/org/repo/installation"] = (Data("{\"id\":1}".utf8), 200)
-    session.responses["/app/installations/1/access_tokens"] = (Data("{\"token\":\"access\"}".utf8), 200)
-    session.responses["/repos/org/repo/actions/runners/registration-token"] = (Data("{\"token\":\"runner\"}".utf8), 200)
-    let service = GitHubService(auth: MockAuth(), session: session, organization: "org", repository: "repo")
-    let token = try await service.runnerRegistrationToken()
-    #expect(token == "runner")
-    #expect(session.requests.map { $0.url?.path ?? "" } == [
-        "/repos/org/repo/installation",
-        "/app/installations/1/access_tokens",
-        "/repos/org/repo/actions/runners/registration-token"
-    ])
+final class GitHubServiceTests: XCTestCase {
+    func testRepoLevelPaths() async throws {
+        let session = MockSession()
+        session.responses["/repos/org/repo/installation"] = (Data("{\"id\":1}".utf8), 200)
+        session.responses["/app/installations/1/access_tokens"] = (Data("{\"token\":\"access\"}".utf8), 200)
+        session.responses["/repos/org/repo/actions/runners/registration-token"] = (Data("{\"token\":\"runner\"}".utf8), 200)
+        let service = GitHubService(auth: MockAuth(), session: session, organization: "org", repository: "repo")
+        let token = try await service.runnerRegistrationToken()
+        XCTAssertEqual(token, "runner")
+        XCTAssertEqual(session.requests.map { $0.url?.path ?? "" }, [
+            "/repos/org/repo/installation",
+            "/app/installations/1/access_tokens",
+            "/repos/org/repo/actions/runners/registration-token"
+        ])
+    }
 }

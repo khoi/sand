@@ -1,4 +1,4 @@
-struct GitHubProvisionerConfig: Decodable {
+struct GitHubProvisionerConfig: Decodable, Sendable {
     let appId: Int
     let organization: String
     let repository: String?
@@ -23,7 +23,7 @@ struct GitHubProvisionerConfig: Decodable {
     }
 }
 
-struct GitHubProvisioner {
+struct GitHubProvisioner: Sendable {
     static let runnerCacheMountTag = "actions-runner-cache"
 
     func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {

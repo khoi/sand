@@ -42,6 +42,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+register_e2e_artifacts "$config" "$log"
 sand_pid=$(start_sand_run "$config" "$log")
 
 wait_for_vm_running "$runner" 180

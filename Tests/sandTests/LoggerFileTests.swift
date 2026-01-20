@@ -1,16 +1,17 @@
 import Foundation
-import Testing
+import XCTest
 @testable import sand
 
-@Test
-func loggerWritesToFile() throws {
-    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    let path = tempDir.appendingPathComponent("sand.log").path
-    let sink = try LogFileSink(path: path)
-    let logger = Logger(label: "test.logger", minimumLevel: .info, sink: sink)
-    logger.info("hello")
+final class LoggerFileTests: XCTestCase {
+    func testLoggerWritesToFile() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let path = tempDir.appendingPathComponent("sand.log").path
+        let sink = try LogFileSink(path: path)
+        let logger = Logger(label: "test.logger", minimumLevel: .info, sink: sink)
+        logger.info("hello")
 
-    let contents = try String(contentsOfFile: path, encoding: .utf8)
-    #expect(contents.contains("[info] test.logger hello"))
+        let contents = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertTrue(contents.contains("[info] test.logger hello"))
+    }
 }

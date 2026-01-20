@@ -49,7 +49,7 @@ struct Run: AsyncParsableCommand {
                 let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level, sink: logSink))
                 let source = runnerConfig.vm.source.resolvedSource
                 logger.info("dry-run: prepare source \(source) for \(logLabel)")
-                try tart.prepare(source: source)
+                try await tart.prepare(source: source)
             }
             logger.info("dry-run complete")
             return
@@ -87,13 +87,23 @@ struct Run: AsyncParsableCommand {
         }
         let shutdownLogger = Logger(label: "sand.shutdown", minimumLevel: level, sink: logSink)
         let signalHandler = SignalHandler(signals: [SIGINT, SIGTERM], logger: shutdownLogger) {
+            let group = DispatchGroup()
             for control in runnerControls {
-                control.terminateProvisioning()
-                control.cancelHealthCheck()
+                group.enter()
+                Task {
+                    await control.terminateProvisioning()
+                    await control.cancelHealthCheck()
+                    group.leave()
+                }
             }
             for coordinator in cleanupTargets {
-                coordinator.cleanup()
+                group.enter()
+                Task {
+                    await coordinator.cleanup()
+                    group.leave()
+                }
             }
+            group.wait()
         }
         defer {
             _ = signalHandler

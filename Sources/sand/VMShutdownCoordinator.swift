@@ -1,7 +1,6 @@
 import Foundation
 
-final class VMShutdownCoordinator {
-    private let lock = NSLock()
+actor VMShutdownCoordinator {
     private var activeName: String?
     private var cleanupStarted = false
     private let destroyer: VMDestroyer
@@ -11,24 +10,16 @@ final class VMShutdownCoordinator {
     }
 
     func activate(name: String) {
-        lock.lock()
         activeName = name
         cleanupStarted = false
-        lock.unlock()
     }
 
-    func cleanup() {
-        lock.lock()
+    func cleanup() async {
         guard !cleanupStarted, let name = activeName else {
-            lock.unlock()
             return
         }
         cleanupStarted = true
-        lock.unlock()
-        try? destroyer.destroy(name: name)
-
-        lock.lock()
+        try? await destroyer.destroy(name: name)
         activeName = nil
-        lock.unlock()
     }
 }

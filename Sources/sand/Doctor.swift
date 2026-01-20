@@ -10,13 +10,13 @@ struct StderrOutputStream: TextOutputStream {
 }
 
 @available(macOS 15.0, *)
-struct Doctor: ParsableCommand {
+struct Doctor: AsyncParsableCommand {
     @OptionGroup
     var logLevel: LogLevelOptions
 
-    func run() throws {
+    func run() async throws {
         var stderr = StderrOutputStream()
-        let issues = collectIssues { message in
+        let issues = await collectIssues { message in
             print(message, to: &stderr)
         }
         let errors = issues.filter { $0.severity == .error }
@@ -33,7 +33,7 @@ struct Doctor: ParsableCommand {
         }
     }
 
-    private func collectIssues(_ report: (String) -> Void) -> [ConfigValidationIssue] {
+    private func collectIssues(_ report: (String) -> Void) async -> [ConfigValidationIssue] {
         var issues: [ConfigValidationIssue] = []
         let dependencies = ["tart", "sshpass", "ssh"]
         report("sand doctor checks:")
@@ -46,7 +46,7 @@ struct Doctor: ParsableCommand {
             ))
         } else {
             report("- tart command health")
-            issues.append(contentsOf: checkTartHealth())
+            issues.append(contentsOf: await checkTartHealth())
         }
         let defaultPath = Config.expandPath(Config.defaultPath)
         report("- config at \(defaultPath)")
@@ -54,10 +54,10 @@ struct Doctor: ParsableCommand {
         return issues
     }
 
-    private func checkTartHealth() -> [ConfigValidationIssue] {
+    private func checkTartHealth() async -> [ConfigValidationIssue] {
         do {
             let runner = SystemProcessRunner()
-            _ = try runner.run(executable: "tart", arguments: ["list"], wait: true)
+            _ = try await runner.run(executable: "tart", arguments: ["list"], wait: true)
             return []
         } catch {
             return [ConfigValidationIssue(severity: .error, message: "tart command failed to run. Verify Tart is installed and working.")]

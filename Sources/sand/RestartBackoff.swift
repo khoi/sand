@@ -41,8 +41,7 @@ struct RestartBackoffState: CustomStringConvertible {
     }
 }
 
-final class RestartBackoff: @unchecked Sendable {
-    private let lock = NSLock()
+actor RestartBackoff {
     private let policy: RestartBackoffPolicy
     private var attempt: Int = 0
     private var pendingDelay: TimeInterval = 0
@@ -55,7 +54,6 @@ final class RestartBackoff: @unchecked Sendable {
 
     @discardableResult
     func schedule(reason: RestartReason) -> TimeInterval {
-        lock.lock()
         if let lastReason, lastReason == reason {
             attempt += 1
         } else {
@@ -66,38 +64,31 @@ final class RestartBackoff: @unchecked Sendable {
         let delay = min(rawDelay, policy.maxDelay)
         pendingDelay = delay
         pendingReason = reason
-        lock.unlock()
         return delay
     }
 
     func takePending() -> (TimeInterval, RestartReason?) {
-        lock.lock()
         let delay = pendingDelay
         let reason = pendingReason
         pendingDelay = 0
         pendingReason = nil
-        lock.unlock()
         return (delay, reason)
     }
 
     func reset() {
-        lock.lock()
         attempt = 0
         pendingDelay = 0
         pendingReason = nil
         lastReason = nil
-        lock.unlock()
     }
 
     func snapshot() -> RestartBackoffState {
-        lock.lock()
         let state = RestartBackoffState(
             attempt: attempt,
             pendingDelay: pendingDelay,
             pendingReason: pendingReason,
             lastReason: lastReason
         )
-        lock.unlock()
         return state
     }
 }

@@ -2,13 +2,13 @@ import ArgumentParser
 import Foundation
 
 @available(macOS 15.0, *)
-struct Destroy: ParsableCommand {
+struct Destroy: AsyncParsableCommand {
     @Option(name: .shortAndLong)
     var config: String = "sand.yml"
     @OptionGroup
     var logLevel: LogLevelOptions
 
-    func run() throws {
+    func run() async throws {
         let level = logLevel.resolvedLevel()
         let logSink = try logLevel.makeLogFileSink()
         let logger = Logger(label: "sand.destroy", minimumLevel: level, sink: logSink)
@@ -32,7 +32,7 @@ struct Destroy: ParsableCommand {
         var firstError: Error?
         for runner in config.runners {
             do {
-                try destroyer.destroy(name: runner.name)
+                try await destroyer.destroy(name: runner.name)
             } catch {
                 if firstError == nil {
                     firstError = error
