@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: macos-26-xlarge
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
