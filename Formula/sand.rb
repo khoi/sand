@@ -30,6 +30,10 @@ class Sand < Formula
   def caveats
     <<~EOS
       sand requires macOS 15+ and Tart available in your PATH.
+
+      macOS DHCP leases last 24 hours by default, causing IP exhaustion if you
+      run more than ~253 VMs per day. To reduce lease time to 10 minutes:
+        sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.InternetSharing.default.plist bootpd -dict DHCPLeaseTimeSecs -int 600
     EOS
   end
 end
