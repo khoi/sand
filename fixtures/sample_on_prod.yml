@@ -1,0 +1,63 @@
+runners:
+  - name: sandrunner-1
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
+      hardware:
+        ramGb: 4
+      run:
+        noGraphics: true
+      mounts:
+        - hostPath: ~/.cache/sand/gha-cache
+          guestFolder: gha-cache
+          readOnly: false
+          tag: gha-cache
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
+    provisioner:
+      type: github
+      config:
+        appId: 2686837
+        organization: supabitapp
+        privateKeyPath: ~/supabit-mac-runner.2026-01-19.private-key.pem
+        runnerName: sandrunner-1
+        extraLabels:
+          - macos
+    healthCheck:
+      command: "pgrep -fl Runner.Listener"
+      interval: 30
+      delay: 360
+  - name: sandrunner-2
+    vm:
+      source:
+        type: oci
+        image: ghcr.io/cirruslabs/macos-tahoe-xcode:latest
+      hardware:
+        ramGb: 4
+      run:
+        noGraphics: true
+      mounts:
+        - hostPath: ~/.cache/sand/gha-cache
+          guestFolder: gha-cache
+          readOnly: false
+          tag: gha-cache
+        - hostPath: ~/.cache/sand/actions-runner
+          guestFolder: sand-cache
+          readOnly: false
+          tag: actions-runner-cache
+    provisioner:
+      type: github
+      config:
+        appId: 2686837
+        organization: supabitapp
+        privateKeyPath: ~/supabit-mac-runner.2026-01-19.private-key.pem
+        runnerName: sandrunner-2
+        extraLabels:
+          - macos
+    healthCheck:
+      command: "pgrep -fl Runner.Listener"
+      interval: 30
+      delay: 360
