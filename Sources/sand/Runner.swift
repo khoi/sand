@@ -19,6 +19,11 @@ struct Runner: Sendable {
         case missingScript
     }
 
+    private struct RunnerCacheInfo {
+        let hostPath: String
+        let guestFolder: String
+    }
+
     init(
         tart: Tart,
         github: GitHubService?,
@@ -84,7 +89,7 @@ struct Runner: Sendable {
             await shutdownCoordinator.cleanup()
             throw error
         }
-        let runnerCacheDirectory = prepareRunnerCacheDirectory(for: config)
+        let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
         let directoryMounts = vm.mounts.map { mount in
             Tart.DirectoryMount(
                 hostPath: mount.hostPath,
@@ -191,7 +196,14 @@ struct Runner: Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
-                let commands = provisioner.script(config: githubConfig, runnerToken: token, cacheDirectory: runnerCacheDirectory)
+                if let runnerCacheInfo {
+                    await preseedRunnerCacheIfPossible(cacheInfo: runnerCacheInfo, ssh: ssh)
+                }
+                let commands = provisioner.script(
+                    config: githubConfig,
+                    runnerToken: token,
+                    cacheDirectory: runnerCacheInfo?.guestFolder
+                )
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
                 case .completed:
@@ -281,7 +293,7 @@ struct Runner: Sendable {
         )
     }
 
-    private func prepareRunnerCacheDirectory(for config: Config.RunnerConfig) -> String? {
+    private func prepareRunnerCacheInfo(for config: Config.RunnerConfig) -> RunnerCacheInfo? {
         guard config.provisioner.type == .github else {
             return nil
         }
@@ -313,7 +325,69 @@ struct Runner: Sendable {
             }
         }
         logger.info("runner cache enabled via mount tag \(GitHubProvisioner.runnerCacheMountTag): \(hostPath) -> \(guestFolder)")
-        return guestFolder
+        return RunnerCacheInfo(hostPath: hostPath, guestFolder: guestFolder)
+    }
+
+    private func preseedRunnerCacheIfPossible(cacheInfo: RunnerCacheInfo, ssh: SSHClient) async {
+        let missing = DependencyChecker.missingCommands(["scp"])
+        if !missing.isEmpty {
+            logger.warning("runner cache preseed skipped: missing scp in PATH")
+            return
+        }
+        let assetName = await resolveRunnerAssetName(ssh: ssh)
+        guard let assetName else {
+            logger.warning("runner cache preseed skipped: unable to resolve runner asset name")
+            return
+        }
+        let hostFile = (cacheInfo.hostPath as NSString).appendingPathComponent(assetName)
+        guard FileManager.default.fileExists(atPath: hostFile) else {
+            logger.info("runner cache preseed skipped: host cache file not found at \(hostFile)")
+            return
+        }
+        let remotePath = await resolveRemoteHome(ssh: ssh)
+            .map { "\($0)/actions-runner.tar.gz" } ?? "actions-runner.tar.gz"
+        if let _ = try? await ssh.exec(command: "test -f \(remotePath)") {
+            logger.info("runner cache preseed skipped: \(remotePath) already present")
+            return
+        }
+        logger.info("runner cache preseed: \(hostFile) -> \(remotePath)")
+        do {
+            _ = try await ssh.copy(localPath: hostFile, remotePath: remotePath)
+        } catch {
+            logger.warning("runner cache preseed failed: \(String(describing: error))")
+        }
+    }
+
+    private func resolveRunnerAssetName(ssh: SSHClient) async -> String? {
+        do {
+            guard let result = try await ssh.exec(command: "uname -s; uname -m") else {
+                return nil
+            }
+            let lines = result.stdout
+                .split(whereSeparator: \.isNewline)
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            guard lines.count >= 2 else {
+                return nil
+            }
+            return GitHubProvisioner.runnerAssetName(os: lines[0], arch: lines[1])
+        } catch {
+            logger.warning("runner cache preseed failed to read OS/arch: \(String(describing: error))")
+            return nil
+        }
+    }
+
+    private func resolveRemoteHome(ssh: SSHClient) async -> String? {
+        do {
+            guard let result = try await ssh.exec(command: "printf %s \"$HOME\"") else {
+                return nil
+            }
+            let home = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            return home.isEmpty ? nil : home
+        } catch {
+            logger.warning("runner cache preseed failed to read remote home: \(String(describing: error))")
+            return nil
+        }
     }
 
     private func waitForSSH(ssh: SSHClient) async -> Bool {

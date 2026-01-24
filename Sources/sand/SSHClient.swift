@@ -48,6 +48,26 @@ struct SSHClient {
         )
     }
 
+    func copy(localPath: String, remotePath: String) async throws -> ProcessResult? {
+        return try await processRunner.run(
+            executable: "sshpass",
+            arguments: [
+                "-p", config.password,
+                "scp",
+                "-o", "PreferredAuthentications=password",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "IdentitiesOnly=yes",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "LogLevel=ERROR",
+                "-P", String(config.port),
+                localPath,
+                "\(config.user)@\(host):\(remotePath)"
+            ],
+            wait: true
+        )
+    }
+
     func checkConnection() async throws {
         _ = try await exec(command: "true")
     }

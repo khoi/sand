@@ -25,6 +25,7 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
 
 struct GitHubProvisioner: Sendable {
     static let runnerCacheMountTag = "actions-runner-cache"
+    static let runnerVersion = "2.330.0"
 
     func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
@@ -32,21 +33,7 @@ struct GitHubProvisioner: Sendable {
         let cacheScript = runnerCacheScript(cacheDirectory: cacheDirectory)
         return [
             """
-os=$(uname -s)
-case "$os" in
-  Darwin) runner_os=osx ;;
-  Linux) runner_os=linux ;;
-  *) echo "unsupported os: $os"; exit 1 ;;
-esac
-arch=$(uname -m)
-case "$arch" in
-  x86_64|amd64) runner_arch=x64 ;;
-  arm64|aarch64) runner_arch=arm64 ;;
-  armv7l|armv6l) runner_arch=arm ;;
-  *) echo "unsupported arch: $arch"; exit 1 ;;
-esac
-version="2.330.0"
-asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
+\(Self.runnerAssetScript())
 download_url=https://github.com/actions/runner/releases/download/v${version}/${asset}
 echo $download_url
 \(cacheScript)
@@ -68,11 +55,59 @@ echo $download_url
         return labels.joined(separator: ",")
     }
 
+    private static func runnerAssetScript() -> String {
+        return """
+os=$(uname -s)
+case "$os" in
+  Darwin) runner_os=osx ;;
+  Linux) runner_os=linux ;;
+  *) echo "unsupported os: $os"; exit 1 ;;
+esac
+arch=$(uname -m)
+case "$arch" in
+  x86_64|amd64) runner_arch=x64 ;;
+  arm64|aarch64) runner_arch=arm64 ;;
+  armv7l|armv6l) runner_arch=arm ;;
+  *) echo "unsupported arch: $arch"; exit 1 ;;
+esac
+version="\(Self.runnerVersion)"
+asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
+"""
+    }
+
+    static func runnerAssetName(os: String, arch: String) -> String? {
+        let runnerOs: String
+        switch os {
+        case "Darwin":
+            runnerOs = "osx"
+        case "Linux":
+            runnerOs = "linux"
+        default:
+            return nil
+        }
+        let runnerArch: String
+        switch arch {
+        case "x86_64", "amd64":
+            runnerArch = "x64"
+        case "arm64", "aarch64":
+            runnerArch = "arm64"
+        case "armv7l", "armv6l":
+            runnerArch = "arm"
+        default:
+            return nil
+        }
+        return "actions-runner-\(runnerOs)-\(runnerArch)-\(Self.runnerVersion).tar.gz"
+    }
+
     private func runnerCacheScript(cacheDirectory: String?) -> String {
         guard let cacheDirectory else {
             return "curl -fsSL -o actions-runner.tar.gz -L ${download_url}"
         }
         return """
+if [ -f "actions-runner.tar.gz" ]; then
+  echo "runner cache hit: preseeded actions-runner.tar.gz"
+  exit 0
+fi
 cache_dir_name="\(cacheDirectory)"
 if [ -z "$cache_dir_name" ]; then
   curl -fsSL -o actions-runner.tar.gz -L ${download_url}
