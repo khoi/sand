@@ -129,33 +129,6 @@ runners:
       command: "pgrep -fl /Users/admin/actions-runner/run.sh"
       interval: 30
       delay: 60
-  - name: runner-2
-    vm:
-      source:
-        type: oci
-        image: ghcr.io/cirruslabs/ubuntu:latest
-      cache:
-        host: ~/.cache/sand/actions-runner
-        name: sand-cache
-    preRun: | # runs before provisioner (Linux cache mount; requires virtiofs support)
-      sudo mkdir -p /mnt/virtiofs # virtiofs mountpoint
-      sudo mount -t virtiofs sand-cache /mnt/virtiofs # share name
-      mkdir -p ~/sand-cache # expected cache path
-      sudo mount --bind /mnt/virtiofs/sand-cache ~/sand-cache # bind to expected path
-    postRun: | # runs after provisioner
-      echo "post-run hook complete"
-    provisioner:
-      type: github
-      config:
-        appId: 123456
-        organization: my-org
-        repository: my-repo
-        privateKeyPath: ~/my-app.private-key.pem
-        runnerName: runner-2
-    healthCheck:
-      command: "pgrep -fl Runner.Listener"
-      interval: 30
-      delay: 60
 ```
 
 To enable runner caching, set `vm.cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<name>` (with `name` acting as the share name).
