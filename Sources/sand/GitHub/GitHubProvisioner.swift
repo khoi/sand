@@ -24,7 +24,6 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
 }
 
 struct GitHubProvisioner: Sendable {
-    static let runnerCacheMountTag = "actions-runner-cache"
     static let runnerVersion = "2.330.0"
 
     func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {

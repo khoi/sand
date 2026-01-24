@@ -53,7 +53,7 @@ final class ConfigValidator {
             if let healthCheck = runner.healthCheck {
                 validateHealthCheck(healthCheck, issues: &runnerIssues)
             }
-            validateRunnerCacheMounts(runner, issues: &runnerIssues)
+            validateRunnerCache(runner, issues: &runnerIssues)
             issues.append(contentsOf: runnerIssues.map {
                 ConfigValidationIssue(
                     severity: $0.severity,
@@ -109,14 +109,17 @@ final class ConfigValidator {
         }
 
         for mount in vm.mounts {
-            if mount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                issues.append(.init(severity: .error, message: "vm.mounts.hostPath must not be empty."))
-            } else if !FileManager.default.fileExists(atPath: mount.hostPath) {
-                issues.append(.init(severity: .warning, message: "Mount hostPath does not exist: \(mount.hostPath)."))
+            let hostPath = mount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if hostPath.isEmpty {
+                issues.append(.init(severity: .error, message: "vm.mounts.host must not be empty."))
+            } else {
+                var isDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: hostPath, isDirectory: &isDirectory), !isDirectory.boolValue {
+                    issues.append(.init(severity: .error, message: "vm.mounts.host must be a directory: \(hostPath)."))
+                }
             }
-            if mount.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                issues.append(.init(severity: .error, message: "vm.mounts.guestFolder must not be empty."))
-            }
+            let resolvedName = Config.resolveMountName(hostPath: mount.hostPath, name: mount.name)
+            validateMountName(resolvedName, label: "vm.mounts.name", issues: &issues)
         }
     }
 
@@ -165,14 +168,12 @@ final class ConfigValidator {
         }
     }
 
-    private func validateRunnerCacheMounts(_ runner: Config.RunnerConfig, issues: inout [ConfigValidationIssue]) {
-        let cacheTag = GitHubProvisioner.runnerCacheMountTag
-        let cacheMounts = runner.vm.mounts.filter { $0.tag == cacheTag }
-        guard !cacheMounts.isEmpty else {
+    private func validateRunnerCache(_ runner: Config.RunnerConfig, issues: inout [ConfigValidationIssue]) {
+        guard let cache = runner.vm.cache else {
             if runner.provisioner.type == .github {
                 issues.append(.init(
                     severity: .warning,
-                    message: "github provisioner configured without vm.mounts tag \(cacheTag); runner cache is disabled."
+                    message: "github provisioner configured without vm.cache; runner cache is disabled."
                 ))
             }
             return
@@ -180,34 +181,23 @@ final class ConfigValidator {
         if runner.provisioner.type != .github {
             issues.append(.init(
                 severity: .warning,
-                message: "vm.mounts tag \(cacheTag) is set but provisioner is not github; cache mount will be ignored."
+                message: "vm.cache is set but provisioner is not github; cache will be ignored."
             ))
         }
-        if cacheMounts.count > 1 {
-            issues.append(.init(
-                severity: .warning,
-                message: "multiple vm.mounts entries tagged \(cacheTag); only the first will be used."
-            ))
-        }
-        for mount in cacheMounts {
-            let hostPath = mount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
-            if hostPath.isEmpty {
-                continue
-            }
+        let hostPath = cache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hostPath.isEmpty {
+            issues.append(.init(severity: .error, message: "vm.cache.host must not be empty."))
+        } else {
             var isDirectory: ObjCBool = false
             if FileManager.default.fileExists(atPath: hostPath, isDirectory: &isDirectory), !isDirectory.boolValue {
                 issues.append(.init(
                     severity: .error,
-                    message: "vm.mounts hostPath for \(cacheTag) must be a directory: \(hostPath)."
-                ))
-            }
-            if mount.readOnly {
-                issues.append(.init(
-                    severity: .warning,
-                    message: "vm.mounts tagged \(cacheTag) is readOnly; cache will not be populated on misses."
+                    message: "vm.cache.host must be a directory: \(hostPath)."
                 ))
             }
         }
+        let resolvedName = Config.resolveMountName(hostPath: cache.hostPath, name: cache.name)
+        validateMountName(resolvedName, label: "vm.cache.name", issues: &issues)
     }
 
     private func stripFilePrefix(_ path: String) -> String {
@@ -216,5 +206,19 @@ final class ConfigValidator {
             return String(path.dropFirst(prefix.count))
         }
         return path
+    }
+
+    private func validateMountName(_ name: String, label: String, issues: inout [ConfigValidationIssue]) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            issues.append(.init(severity: .error, message: "\(label) must not be empty."))
+            return
+        }
+        if trimmed.contains("/") {
+            issues.append(.init(severity: .error, message: "\(label) must not contain '/'."))
+        }
+        if trimmed.contains(":") {
+            issues.append(.init(severity: .error, message: "\(label) must not contain ':'."))
+        }
     }
 }

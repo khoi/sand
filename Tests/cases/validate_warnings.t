@@ -24,9 +24,12 @@ runners:
         password: ${SAND_E2E_SSH_PASSWORD}
         port: ${SAND_E2E_SSH_PORT}
       mounts:
-        - hostPath: /path/does/not/exist
-          guestFolder: /tmp/e2e
-          readOnly: true
+        - host: /path/does/not/exist
+          name: e2e
+          mode: ro
+      cache:
+        host: /tmp/runner-cache
+        name: sand-cache
     provisioner:
       type: script
       config:
@@ -36,4 +39,4 @@ EOF_CONFIG
 output=$("$SAND_BIN" validate --config "$config")
 assert_match "warning" "$output"
 assert_match "stopAfter" "$output"
-assert_match "Mount hostPath does not exist" "$output"
+assert_match "vm.cache is set but provisioner is not github" "$output"

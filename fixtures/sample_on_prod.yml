@@ -9,14 +9,12 @@ runners:
       run:
         noGraphics: true
       mounts:
-        - hostPath: ~/.cache/sand/gha-cache
-          guestFolder: gha-cache
-          readOnly: false
-          tag: gha-cache
-        - hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
+        - host: ~/.cache/sand/gha-cache
+          name: gha-cache
+          mode: rw
+      cache:
+        host: ~/.cache/sand/actions-runner
+        name: sand-cache
     provisioner:
       type: github
       config:
@@ -40,14 +38,12 @@ runners:
       run:
         noGraphics: true
       mounts:
-        - hostPath: ~/.cache/sand/gha-cache
-          guestFolder: gha-cache
-          readOnly: false
-          tag: gha-cache
-        - hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
+        - host: ~/.cache/sand/gha-cache
+          name: gha-cache
+          mode: rw
+      cache:
+        host: ~/.cache/sand/actions-runner
+        name: sand-cache
     provisioner:
       type: github
       config:

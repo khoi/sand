@@ -20,10 +20,8 @@ final class ConfigTests: XCTestCase {
                   unit: px
                   refit: true
               mounts:
-                - hostPath: ~/cache
-                  guestFolder: cache
-                  readOnly: true
-                  tag: build
+                - host: ~/cache
+                  mode: ro
               run:
                 noGraphics: false
                 noClipboard: true
@@ -60,9 +58,11 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.vm.source.type, .local)
         XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "file://\(home)/vm")
         XCTAssertEqual(config.runners.first?.vm.mounts.first?.hostPath, "\(home)/cache")
-        XCTAssertEqual(config.runners.first?.vm.mounts.first?.guestFolder, "cache")
-        XCTAssertEqual(config.runners.first?.vm.mounts.first?.readOnly, true)
-        XCTAssertEqual(config.runners.first?.vm.mounts.first?.tag, "build")
+        XCTAssertEqual(Config.resolveMountName(
+            hostPath: config.runners.first?.vm.mounts.first?.hostPath ?? "",
+            name: config.runners.first?.vm.mounts.first?.name
+        ), "cache")
+        XCTAssertEqual(config.runners.first?.vm.mounts.first?.mode, .ro)
         XCTAssertEqual(config.runners.first?.vm.run.noGraphics, false)
         XCTAssertEqual(config.runners.first?.vm.run.noClipboard, true)
         XCTAssertEqual(config.runners.first?.vm.diskSizeGb, 80)

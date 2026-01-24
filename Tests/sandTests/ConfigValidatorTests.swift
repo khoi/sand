@@ -9,6 +9,7 @@ final class ConfigValidatorTests: XCTestCase {
             source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
             hardware: nil,
             mounts: [],
+            cache: Config.Cache(hostPath: "/tmp/sand-cache", name: "sand-cache"),
             run: .default,
             diskSizeGb: nil,
             ssh: .standard
@@ -44,7 +45,8 @@ final class ConfigValidatorTests: XCTestCase {
                 display: Config.Display(width: 0, height: 0, unit: nil, refit: nil),
                 audio: nil
             ),
-            mounts: [Config.DirectoryMount(hostPath: "/missing-mount", guestFolder: "", readOnly: false, tag: nil)],
+            mounts: [Config.DirectoryMount(hostPath: "/missing-mount", name: "bad/name", mode: .rw)],
+            cache: nil,
             run: .default,
             diskSizeGb: 0,
             ssh: Config.SSH(user: "", password: "", port: 70_000, connectMaxRetries: 0)
@@ -70,8 +72,7 @@ final class ConfigValidatorTests: XCTestCase {
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.password must not be empty.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.port must be between 1 and 65535.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.ssh.connectMaxRetries must be greater than 0.")))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .warning, message: "runner runner-1: Mount hostPath does not exist: /missing-mount.")))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.mounts.guestFolder must not be empty.")))
+        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.mounts.name must not contain '/'.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: provisioner.config.run must not be empty for script provisioner.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: healthCheck.command must not be empty.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: healthCheck.interval must be greater than 0.")))
@@ -83,6 +84,7 @@ final class ConfigValidatorTests: XCTestCase {
             source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
             hardware: nil,
             mounts: [],
+            cache: nil,
             run: .default,
             diskSizeGb: nil,
             ssh: .standard
@@ -97,18 +99,13 @@ final class ConfigValidatorTests: XCTestCase {
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner name must be unique: same.")))
     }
 
-    func testRunnerCacheMountTagValidation() throws {
-        let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+    func testRunnerCacheValidation() throws {
         let cacheFile = try writeTempFile(contents: "not-a-directory")
         let vm = Config.VM(
             source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
             hardware: nil,
-            mounts: [
-                Config.DirectoryMount(hostPath: cacheDir.path, guestFolder: "cache", readOnly: true, tag: "actions-runner-cache"),
-                Config.DirectoryMount(hostPath: cacheDir.path, guestFolder: "cache-2", readOnly: false, tag: "actions-runner-cache"),
-                Config.DirectoryMount(hostPath: cacheFile.path, guestFolder: "cache-3", readOnly: false, tag: "actions-runner-cache")
-            ],
+            mounts: [],
+            cache: Config.Cache(hostPath: cacheFile.path, name: "bad/cache"),
             run: .default,
             diskSizeGb: nil,
             ssh: .standard
@@ -125,19 +122,15 @@ final class ConfigValidatorTests: XCTestCase {
         let issues = ConfigValidator().validate(Config(runners: [runner]))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(
             severity: .warning,
-            message: "runner runner-1: vm.mounts tag actions-runner-cache is set but provisioner is not github; cache mount will be ignored."
-        )))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(
-            severity: .warning,
-            message: "runner runner-1: multiple vm.mounts entries tagged actions-runner-cache; only the first will be used."
-        )))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(
-            severity: .warning,
-            message: "runner runner-1: vm.mounts tagged actions-runner-cache is readOnly; cache will not be populated on misses."
+            message: "runner runner-1: vm.cache is set but provisioner is not github; cache will be ignored."
         )))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(
             severity: .error,
-            message: "runner runner-1: vm.mounts hostPath for actions-runner-cache must be a directory: \(cacheFile.path)."
+            message: "runner runner-1: vm.cache.name must not contain '/'."
+        )))
+        XCTAssertTrue(issues.contains(ConfigValidationIssue(
+            severity: .error,
+            message: "runner runner-1: vm.cache.host must be a directory: \(cacheFile.path)."
         )))
     }
 }

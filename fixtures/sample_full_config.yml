@@ -16,10 +16,9 @@ runners:
           refit: null
         audio: null
       mounts:
-        - hostPath: ~/ci-cache
-          guestFolder: cache
-          readOnly: false
-          tag: null
+        - host: ~/ci-cache
+          name: cache
+          mode: rw
       run:
         noGraphics: true
         noClipboard: false
@@ -49,11 +48,9 @@ runners:
         type: oci
         image: "ghcr.io/cirruslabs/ubuntu:latest"
         path: null
-      mounts:
-        - hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
+      cache:
+        host: ~/.cache/sand/actions-runner
+        name: sand-cache
       ssh:
         user: admin
         password: admin

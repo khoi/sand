@@ -114,11 +114,9 @@ runners:
       source:
         type: oci
         image: ghcr.io/cirruslabs/macos-runner:tahoe
-      mounts:
-        - hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
+      cache:
+        host: ~/.cache/sand/actions-runner
+        name: sand-cache
     provisioner:
       type: github
       config:
@@ -136,14 +134,12 @@ runners:
       source:
         type: oci
         image: ghcr.io/cirruslabs/ubuntu:latest
-      mounts:
-        - hostPath: ~/.cache/sand/actions-runner
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
-    preRun: | # runs before provisioner (Linux cache mount)
+      cache:
+        host: ~/.cache/sand/actions-runner
+        name: sand-cache
+    preRun: | # runs before provisioner (Linux cache mount; requires virtiofs support)
       sudo mkdir -p /mnt/virtiofs # virtiofs mountpoint
-      sudo mount -t virtiofs actions-runner-cache /mnt/virtiofs # mount tag
+      sudo mount -t virtiofs sand-cache /mnt/virtiofs # share name
       mkdir -p ~/sand-cache # expected cache path
       sudo mount --bind /mnt/virtiofs/sand-cache ~/sand-cache # bind to expected path
     postRun: | # runs after provisioner
@@ -162,12 +158,12 @@ runners:
       delay: 60
 ```
 
-To enable runner caching, add a `vm.mounts` entry tagged `actions-runner-cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<guestFolder>` (with `guestFolder` acting as the share name). If the mount is read-only, cache misses will still download but the archive won’t be persisted.
+To enable runner caching, set `vm.cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<name>` (with `name` acting as the share name).
 
 Common pitfalls:
-- `readOnly: true` on the cache mount prevents cache population on misses.
-- `hostPath` must be a directory (missing paths are created; file paths are rejected).
-- cache mounts are ignored unless the provisioner type is `github`.
+- `vm.cache.host` must be a directory (missing paths are created; file paths are rejected).
+- `vm.cache` is ignored unless the provisioner type is `github`.
+- Linux runner cache requires virtiofs support in the guest. The default Ubuntu images from cirruslabs do not provide virtiofs, so cache mounts on Ubuntu are not supported.
 
 ### Custom provisioner script
 

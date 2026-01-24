@@ -8,14 +8,24 @@ struct Config: Decodable, Sendable {
         let source: VMSource
         let hardware: Hardware?
         let mounts: [DirectoryMount]
+        let cache: Cache?
         let run: RunOptions
         let diskSizeGb: Int?
         let ssh: SSH
 
-        init(source: VMSource, hardware: Hardware?, mounts: [DirectoryMount], run: RunOptions, diskSizeGb: Int?, ssh: SSH) {
+        init(
+            source: VMSource,
+            hardware: Hardware?,
+            mounts: [DirectoryMount],
+            cache: Cache?,
+            run: RunOptions,
+            diskSizeGb: Int?,
+            ssh: SSH
+        ) {
             self.source = source
             self.hardware = hardware
             self.mounts = mounts
+            self.cache = cache
             self.run = run
             self.diskSizeGb = diskSizeGb
             self.ssh = ssh
@@ -26,6 +36,7 @@ struct Config: Decodable, Sendable {
             self.source = try container.decode(VMSource.self, forKey: .source)
             self.hardware = try container.decodeIfPresent(Hardware.self, forKey: .hardware)
             self.mounts = try container.decodeIfPresent([DirectoryMount].self, forKey: .mounts) ?? []
+            self.cache = try container.decodeIfPresent(Cache.self, forKey: .cache)
             self.run = try container.decodeIfPresent(RunOptions.self, forKey: .run) ?? .default
             self.diskSizeGb = try container.decodeIfPresent(Int.self, forKey: .diskSizeGb)
             self.ssh = try container.decodeIfPresent(SSH.self, forKey: .ssh) ?? .standard
@@ -35,6 +46,7 @@ struct Config: Decodable, Sendable {
             case source
             case hardware
             case mounts
+            case cache
             case run
             case diskSizeGb
             case ssh
@@ -111,31 +123,53 @@ struct Config: Decodable, Sendable {
     }
 
     struct DirectoryMount: Decodable, Sendable {
-        let hostPath: String
-        let guestFolder: String
-        let readOnly: Bool
-        let tag: String?
+        enum Mode: String, Decodable, Sendable {
+            case ro
+            case rw
+        }
 
-        init(hostPath: String, guestFolder: String, readOnly: Bool, tag: String?) {
+        let hostPath: String
+        let name: String?
+        let mode: Mode
+
+        init(hostPath: String, name: String?, mode: Mode) {
             self.hostPath = hostPath
-            self.guestFolder = guestFolder
-            self.readOnly = readOnly
-            self.tag = tag
+            self.name = name
+            self.mode = mode
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.hostPath = try container.decode(String.self, forKey: .hostPath)
-            self.guestFolder = try container.decode(String.self, forKey: .guestFolder)
-            self.readOnly = try container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
-            self.tag = try container.decodeIfPresent(String.self, forKey: .tag)
+            self.hostPath = try container.decode(String.self, forKey: .host)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
+            self.mode = try container.decodeIfPresent(Mode.self, forKey: .mode) ?? .rw
         }
 
         private enum CodingKeys: String, CodingKey {
-            case hostPath
-            case guestFolder
-            case readOnly
-            case tag
+            case host
+            case name
+            case mode
+        }
+    }
+
+    struct Cache: Decodable, Sendable {
+        let hostPath: String
+        let name: String?
+
+        init(hostPath: String, name: String?) {
+            self.hostPath = hostPath
+            self.name = name
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.hostPath = try container.decode(String.self, forKey: .host)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case host
+            case name
         }
     }
 
@@ -319,15 +353,21 @@ struct Config: Decodable, Sendable {
         let mounts = vm.mounts.map { mount in
             DirectoryMount(
                 hostPath: Config.expandPath(mount.hostPath),
-                guestFolder: mount.guestFolder,
-                readOnly: mount.readOnly,
-                tag: mount.tag
+                name: mount.name,
+                mode: mount.mode
+            )
+        }
+        let cache = vm.cache.map { cache in
+            Cache(
+                hostPath: Config.expandPath(cache.hostPath),
+                name: cache.name
             )
         }
         return VM(
             source: vmSource,
             hardware: vm.hardware,
             mounts: mounts,
+            cache: cache,
             run: vm.run,
             diskSizeGb: vm.diskSizeGb,
             ssh: vm.ssh
@@ -348,6 +388,19 @@ struct Config: Decodable, Sendable {
             return prefix + expandPath(rawPath)
         }
         return prefix + expandPath(path)
+    }
+
+    static func resolveMountName(hostPath: String, name: String?) -> String {
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedName.isEmpty {
+            return trimmedName
+        }
+        let trimmedHost = hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedHost.isEmpty else {
+            return ""
+        }
+        let last = URL(fileURLWithPath: trimmedHost).lastPathComponent
+        return last.isEmpty ? trimmedHost : last
     }
 }
 

@@ -57,7 +57,7 @@ final class TartTests: XCTestCase {
         let tart = makeTart(runner)
         let options = Tart.RunOptions(
             directoryMounts: [
-                Tart.DirectoryMount(hostPath: "/tmp/dir", guestFolder: "dir", readOnly: true, tag: "build")
+                Tart.DirectoryMount(hostPath: "/tmp/dir", name: "dir", readOnly: true)
             ],
             noAudio: true,
             noGraphics: false,
@@ -66,7 +66,7 @@ final class TartTests: XCTestCase {
         try await tart.run(name: "ephemeral", options: options)
         XCTAssertEqual(runner.calls.first, .init(
             executable: "tart",
-            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--dir", "dir:/tmp/dir:ro,tag=build"],
+            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--dir", "dir:/tmp/dir:ro"],
             wait: false
         ))
     }

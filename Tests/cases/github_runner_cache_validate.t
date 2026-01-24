@@ -24,11 +24,9 @@ runners:
       source:
         type: oci
         image: ${SAND_E2E_IMAGE}
-      mounts:
-        - hostPath: ${cache_dir}
-          guestFolder: sand-cache
-          readOnly: false
-          tag: actions-runner-cache
+      cache:
+        host: ${cache_dir}
+        name: sand-cache
     provisioner:
       type: github
       config:

@@ -17,11 +17,12 @@ struct Runner: Sendable {
     enum RunnerError: Error {
         case missingGitHub
         case missingScript
+        case invalidMountHostPath(String)
     }
 
     private struct RunnerCacheInfo {
         let hostPath: String
-        let guestFolder: String
+        let name: String
     }
 
     init(
@@ -90,17 +91,10 @@ struct Runner: Sendable {
             throw error
         }
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
-        if runnerCacheInfo == nil, config.provisioner.type == .github {
-            logger.info("runner cache disabled: missing vm.mounts tag \(GitHubProvisioner.runnerCacheMountTag)")
+        if runnerCacheInfo == nil, config.provisioner.type == .github, config.vm.cache == nil {
+            logger.info("runner cache disabled: missing vm.cache")
         }
-        let directoryMounts = vm.mounts.map { mount in
-            Tart.DirectoryMount(
-                hostPath: mount.hostPath,
-                guestFolder: mount.guestFolder,
-                readOnly: mount.readOnly,
-                tag: resolvedMountTag(for: mount)
-            )
-        }
+        let directoryMounts = try buildDirectoryMounts(vm: vm, cacheInfo: runnerCacheInfo, includeCache: config.provisioner.type == .github)
         let runOptions = Tart.RunOptions(
             directoryMounts: directoryMounts,
             noAudio: vm.hardware?.audio == false,
@@ -205,7 +199,7 @@ struct Runner: Sendable {
                 let commands = provisioner.script(
                     config: githubConfig,
                     runnerToken: token,
-                    cacheDirectory: runnerCacheInfo?.guestFolder
+                    cacheDirectory: runnerCacheInfo?.name
                 )
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
@@ -300,35 +294,22 @@ struct Runner: Sendable {
         guard config.provisioner.type == .github else {
             return nil
         }
-        let cacheMounts = config.vm.mounts.filter { $0.tag == GitHubProvisioner.runnerCacheMountTag }
-        guard let cacheMount = cacheMounts.first else {
+        guard let cache = config.vm.cache else {
             return nil
         }
-        if cacheMounts.count > 1 {
-            logger.warning("multiple vm.mounts entries tagged \(GitHubProvisioner.runnerCacheMountTag); using the first")
-        }
-        let guestFolder = cacheMount.guestFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hostPath = cacheMount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        if guestFolder.isEmpty || hostPath.isEmpty {
+        let name = Config.resolveMountName(hostPath: cache.hostPath, name: cache.name).trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostPath = cache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty || hostPath.isEmpty {
             return nil
         }
-        var isDirectory: ObjCBool = false
-        let fileManager = FileManager.default
-        if fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory) {
-            if !isDirectory.boolValue {
-                logger.warning("runner cache hostPath exists but is not a directory: \(hostPath)")
-                return nil
-            }
-        } else {
-            do {
-                try fileManager.createDirectory(atPath: hostPath, withIntermediateDirectories: true)
-            } catch {
-                logger.warning("runner cache hostPath could not be created at \(hostPath): \(String(describing: error))")
-                return nil
-            }
+        do {
+            try ensureDirectoryExists(hostPath)
+        } catch {
+            logger.warning("runner cache host could not be prepared at \(hostPath): \(String(describing: error))")
+            return nil
         }
-        logger.info("runner cache enabled via mount tag \(GitHubProvisioner.runnerCacheMountTag): \(hostPath) -> \(guestFolder)")
-        return RunnerCacheInfo(hostPath: hostPath, guestFolder: guestFolder)
+        logger.info("runner cache enabled: \(hostPath) -> \(name)")
+        return RunnerCacheInfo(hostPath: hostPath, name: name)
     }
 
     private func preseedRunnerCacheIfPossible(cacheInfo: RunnerCacheInfo, ssh: SSHClient) async {
@@ -877,9 +858,8 @@ struct Runner: Sendable {
             return
         }
         for mount in options.directoryMounts {
-            let tagInfo = mount.tag.map { ", tag=\($0)" } ?? ""
             let mode = mount.readOnly ? "ro" : "rw"
-            logger.info("VM \(name) mount: \(mount.guestFolder) <- \(mount.hostPath) (\(mode)\(tagInfo))")
+            logger.info("VM \(name) mount: \(mount.name) <- \(mount.hostPath) (\(mode))")
         }
     }
 
@@ -901,10 +881,6 @@ struct Runner: Sendable {
         case .running:
             return "running"
         }
-    }
-
-    private func resolvedMountTag(for mount: Config.DirectoryMount) -> String? {
-        return mount.tag
     }
 
     private func logScript(_ script: String) {
@@ -951,6 +927,40 @@ struct Runner: Sendable {
         case .healthCheckFailed:
             return "healthCheckFailed"
         }
+    }
+
+    private func buildDirectoryMounts(
+        vm: Config.VM,
+        cacheInfo: RunnerCacheInfo?,
+        includeCache: Bool
+    ) throws -> [Tart.DirectoryMount] {
+        var mounts: [Tart.DirectoryMount] = []
+        for mount in vm.mounts {
+            let hostPath = mount.hostPath
+            try ensureDirectoryExists(hostPath)
+            let name = Config.resolveMountName(hostPath: hostPath, name: mount.name)
+            mounts.append(Tart.DirectoryMount(hostPath: hostPath, name: name, readOnly: mount.mode == .ro))
+        }
+        if includeCache, let cacheInfo {
+            mounts.append(Tart.DirectoryMount(hostPath: cacheInfo.hostPath, name: cacheInfo.name, readOnly: false))
+        }
+        return mounts
+    }
+
+    private func ensureDirectoryExists(_ path: String) throws {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw RunnerError.invalidMountHostPath(path)
+        }
+        var isDirectory: ObjCBool = false
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: trimmed, isDirectory: &isDirectory) {
+            guard isDirectory.boolValue else {
+                throw RunnerError.invalidMountHostPath(trimmed)
+            }
+            return
+        }
+        try fileManager.createDirectory(atPath: trimmed, withIntermediateDirectories: true)
     }
 }
 

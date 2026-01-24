@@ -12,22 +12,18 @@ struct Tart: Sendable {
     }
     struct DirectoryMount: Equatable {
         let hostPath: String
-        let guestFolder: String
+        let name: String
         let readOnly: Bool
-        let tag: String?
 
         var runArgument: String {
             var options: [String] = []
             if readOnly {
                 options.append("ro")
             }
-            if let tag {
-                options.append("tag=\(tag)")
-            }
             if options.isEmpty {
-                return "\(guestFolder):\(hostPath)"
+                return "\(name):\(hostPath)"
             }
-            return "\(guestFolder):\(hostPath):" + options.joined(separator: ",")
+            return "\(name):\(hostPath):" + options.joined(separator: ",")
         }
     }
 

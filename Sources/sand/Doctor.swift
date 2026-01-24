@@ -92,12 +92,10 @@ struct Doctor: AsyncParsableCommand {
 
     private func checkRunnerCacheAssets(_ config: Config) -> [ConfigValidationIssue] {
         var issues: [ConfigValidationIssue] = []
-        let cacheTag = GitHubProvisioner.runnerCacheMountTag
         let fileManager = FileManager.default
         for runner in config.runners where runner.provisioner.type == .github {
-            let cacheMount = runner.vm.mounts.first { $0.tag == cacheTag }
-            guard let cacheMount else { continue }
-            let hostPath = cacheMount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let cache = runner.vm.cache else { continue }
+            let hostPath = cache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !hostPath.isEmpty else { continue }
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory), isDirectory.boolValue else {
