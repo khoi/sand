@@ -45,6 +45,13 @@ struct Doctor: AsyncParsableCommand {
                 message: "Missing required dependencies in PATH: \(missing.joined(separator: ", "))."
             ))
         } else {
+            let optionalMissing = DependencyChecker.missingCommands(["scp"])
+            if !optionalMissing.isEmpty {
+                issues.append(.init(
+                    severity: .warning,
+                    message: "scp not found in PATH; runner cache preseed will be disabled."
+                ))
+            }
             report("- tart command health")
             issues.append(contentsOf: await checkTartHealth())
         }
@@ -75,10 +82,41 @@ struct Doctor: AsyncParsableCommand {
         do {
             let config = try Config.load(path: path)
             let validator = ConfigValidator()
-            return validator.validate(config)
+            var issues = validator.validate(config)
+            issues.append(contentsOf: checkRunnerCacheAssets(config))
+            return issues
         } catch {
             return [ConfigValidationIssue(severity: .error, message: "Failed to load config at \(path): \(error.localizedDescription)")]
         }
+    }
+
+    private func checkRunnerCacheAssets(_ config: Config) -> [ConfigValidationIssue] {
+        var issues: [ConfigValidationIssue] = []
+        let cacheTag = GitHubProvisioner.runnerCacheMountTag
+        let fileManager = FileManager.default
+        for runner in config.runners where runner.provisioner.type == .github {
+            let cacheMount = runner.vm.mounts.first { $0.tag == cacheTag }
+            guard let cacheMount else { continue }
+            let hostPath = cacheMount.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !hostPath.isEmpty else { continue }
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: hostPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+                continue
+            }
+            guard let entries = try? fileManager.contentsOfDirectory(atPath: hostPath) else {
+                continue
+            }
+            let hasRunnerAsset = entries.contains { name in
+                name.hasPrefix("actions-runner-") && name.hasSuffix(".tar.gz")
+            }
+            if !hasRunnerAsset {
+                issues.append(.init(
+                    severity: .warning,
+                    message: "Runner cache directory has no actions-runner-*.tar.gz at \(hostPath); sand will download the runner on first boot."
+                ))
+            }
+        }
+        return issues
     }
 
 }

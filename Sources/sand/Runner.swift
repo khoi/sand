@@ -90,6 +90,9 @@ struct Runner: Sendable {
             throw error
         }
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
+        if runnerCacheInfo == nil, config.provisioner.type == .github {
+            logger.info("runner cache disabled: missing vm.mounts tag \(GitHubProvisioner.runnerCacheMountTag)")
+        }
         let directoryMounts = vm.mounts.map { mount in
             Tart.DirectoryMount(
                 hostPath: mount.hostPath,

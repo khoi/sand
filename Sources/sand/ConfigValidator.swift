@@ -169,6 +169,12 @@ final class ConfigValidator {
         let cacheTag = GitHubProvisioner.runnerCacheMountTag
         let cacheMounts = runner.vm.mounts.filter { $0.tag == cacheTag }
         guard !cacheMounts.isEmpty else {
+            if runner.provisioner.type == .github {
+                issues.append(.init(
+                    severity: .warning,
+                    message: "github provisioner configured without vm.mounts tag \(cacheTag); runner cache is disabled."
+                ))
+            }
             return
         }
         if runner.provisioner.type != .github {
