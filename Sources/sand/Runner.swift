@@ -324,7 +324,7 @@ struct Runner: Sendable {
     private func resolveRunnerVersion(cacheInfo: RunnerCacheInfo?) async throws -> String {
         do {
             let version = try await runnerVersionResolver.latestVersion()
-            logger.info("resolved latest Actions runner version: \(version)")
+            logger.info("resolved latest Actions runner version via GitHub API: \(version)")
             return version
         } catch {
             guard let cacheInfo,
@@ -332,7 +332,7 @@ struct Runner: Sendable {
                 logger.error("failed to resolve latest Actions runner version: \(String(describing: error))")
                 throw error
             }
-            logger.warning("failed to resolve latest Actions runner version; using cached version \(cachedVersion): \(String(describing: error))")
+            logger.warning("failed to resolve latest Actions runner version; using cached version \(cachedVersion) from \(cacheInfo.hostPath): \(String(describing: error))")
             return cachedVersion
         }
     }
@@ -352,6 +352,7 @@ struct Runner: Sendable {
             logger.warning("runner cache preseed skipped: unable to resolve runner asset name")
             return
         }
+        logger.debug("runner cache asset resolved: \(assetName) (version \(runnerVersion))")
         let hostFile = (cacheInfo.hostPath as NSString).appendingPathComponent(assetName)
         guard FileManager.default.fileExists(atPath: hostFile) else {
             logger.info("runner cache preseed skipped: host cache file not found at \(hostFile)")
