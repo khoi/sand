@@ -24,15 +24,20 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
 }
 
 struct GitHubProvisioner: Sendable {
-    static let runnerVersion = "2.330.0"
+    static let runnerCacheMountTag = "actions-runner-cache"
 
-    func script(config: GitHubProvisionerConfig, runnerToken: String, cacheDirectory: String? = nil) -> [String] {
+    func script(
+        config: GitHubProvisionerConfig,
+        runnerToken: String,
+        runnerVersion: String,
+        cacheDirectory: String? = nil
+    ) -> [String] {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
         let cacheScript = runnerCacheScript(cacheDirectory: cacheDirectory)
         return [
             """
-\(Self.runnerAssetScript())
+\(Self.runnerAssetScript(runnerVersion: runnerVersion))
 download_url=https://github.com/actions/runner/releases/download/v${version}/${asset}
 echo $download_url
 \(cacheScript)
@@ -54,7 +59,7 @@ echo $download_url
         return labels.joined(separator: ",")
     }
 
-    private static func runnerAssetScript() -> String {
+    private static func runnerAssetScript(runnerVersion: String) -> String {
         return """
 os=$(uname -s)
 case "$os" in
@@ -69,12 +74,12 @@ case "$arch" in
   armv7l|armv6l) runner_arch=arm ;;
   *) echo "unsupported arch: $arch"; exit 1 ;;
 esac
-version="\(Self.runnerVersion)"
+version="\(runnerVersion)"
 asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
 """
     }
 
-    static func runnerAssetName(os: String, arch: String) -> String? {
+    static func runnerAssetName(os: String, arch: String, version: String) -> String? {
         let runnerOs: String
         switch os {
         case "Darwin":
@@ -95,7 +100,7 @@ asset=actions-runner-${runner_os}-${runner_arch}-${version}.tar.gz
         default:
             return nil
         }
-        return "actions-runner-\(runnerOs)-\(runnerArch)-\(Self.runnerVersion).tar.gz"
+        return "actions-runner-\(runnerOs)-\(runnerArch)-\(version).tar.gz"
     }
 
     private func runnerCacheScript(cacheDirectory: String?) -> String {

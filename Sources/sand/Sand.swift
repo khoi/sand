@@ -56,6 +56,7 @@ struct Run: AsyncParsableCommand {
         }
 
         let provisioner = GitHubProvisioner()
+        let runnerVersionResolver = GitHubRunnerVersionResolver()
         var runners: [Runner] = []
         var cleanupTargets: [VMShutdownCoordinator] = []
         var runnerControls: [RunnerControl] = []
@@ -75,6 +76,7 @@ struct Run: AsyncParsableCommand {
                 tart: tart,
                 github: github,
                 provisioner: provisioner,
+                runnerVersionResolver: runnerVersionResolver,
                 config: runnerConfig,
                 shutdownCoordinator: shutdownCoordinator,
                 control: runnerControl,

@@ -13,11 +13,17 @@ final class GitHubProvisionerTests: XCTestCase {
             runnerName: "runner-1",
             extraLabels: ["fast", "arm64"]
         )
-        let script = provisioner.script(config: config, runnerToken: "token")
+        let runnerVersion = "2.999.0"
+        let script = provisioner.script(
+            config: config,
+            runnerToken: "token",
+            runnerVersion: runnerVersion
+        )
         let joined = script.joined(separator: "\n")
         XCTAssertTrue(joined.contains("--labels sand,fast,arm64"))
         XCTAssertTrue(joined.contains("--url https://github.com/org/repo"))
         XCTAssertTrue(joined.contains("actions/runner/releases/download"))
+        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
         XCTAssertFalse(joined.contains("runner cache"))
     }
 
@@ -31,11 +37,17 @@ final class GitHubProvisionerTests: XCTestCase {
             runnerName: "runner-1",
             extraLabels: nil
         )
-        let script = provisioner.script(config: config, runnerToken: "token")
+        let runnerVersion = "2.999.0"
+        let script = provisioner.script(
+            config: config,
+            runnerToken: "token",
+            runnerVersion: runnerVersion
+        )
         let joined = script.joined(separator: "\n")
         XCTAssertTrue(joined.contains("--labels sand"))
         XCTAssertTrue(joined.contains("--url https://github.com/org"))
         XCTAssertTrue(joined.contains("actions-runner-${runner_os}-${runner_arch}"))
+        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
         XCTAssertFalse(joined.contains("runner cache"))
     }
 
@@ -49,13 +61,20 @@ final class GitHubProvisionerTests: XCTestCase {
             runnerName: "runner-1",
             extraLabels: nil
         )
-        let script = provisioner.script(config: config, runnerToken: "token", cacheDirectory: "sand-cache")
+        let runnerVersion = "2.999.0"
+        let script = provisioner.script(
+            config: config,
+            runnerToken: "token",
+            runnerVersion: runnerVersion,
+            cacheDirectory: "sand-cache"
+        )
         let joined = script.joined(separator: "\n")
         XCTAssertTrue(joined.contains("runner cache hit"))
         XCTAssertTrue(joined.contains("runner cache miss"))
         XCTAssertTrue(joined.contains("runner cache unavailable"))
         XCTAssertTrue(joined.contains("cache_dir="))
         XCTAssertTrue(joined.contains("cache_file="))
+        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
     }
 
     func testScriptUsesRunnerCacheDirectoryValue() {
@@ -69,8 +88,15 @@ final class GitHubProvisionerTests: XCTestCase {
             extraLabels: nil
         )
         let cacheDirectory = "/var/tmp/runner-cache"
-        let script = provisioner.script(config: config, runnerToken: "token", cacheDirectory: cacheDirectory)
+        let runnerVersion = "2.999.0"
+        let script = provisioner.script(
+            config: config,
+            runnerToken: "token",
+            runnerVersion: runnerVersion,
+            cacheDirectory: cacheDirectory
+        )
         let joined = script.joined(separator: "\n")
         XCTAssertTrue(joined.contains("cache_dir_name=\"\(cacheDirectory)\""))
+        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
     }
 }

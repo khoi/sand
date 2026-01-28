@@ -4,6 +4,7 @@ struct Runner: Sendable {
     let tart: Tart
     let github: GitHubService?
     let provisioner: GitHubProvisioner
+    let runnerVersionResolver: GitHubRunnerVersionResolver
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
     let control: RunnerControl
@@ -29,6 +30,7 @@ struct Runner: Sendable {
         tart: Tart,
         github: GitHubService?,
         provisioner: GitHubProvisioner,
+        runnerVersionResolver: GitHubRunnerVersionResolver,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
         control: RunnerControl,
@@ -40,6 +42,7 @@ struct Runner: Sendable {
         self.tart = tart
         self.github = github
         self.provisioner = provisioner
+        self.runnerVersionResolver = runnerVersionResolver
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
         self.control = control
@@ -193,12 +196,18 @@ struct Runner: Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
+                let runnerVersion = try await resolveRunnerVersion(cacheInfo: runnerCacheInfo)
                 if let runnerCacheInfo {
-                    await preseedRunnerCacheIfPossible(cacheInfo: runnerCacheInfo, ssh: ssh)
+                    await preseedRunnerCacheIfPossible(
+                        cacheInfo: runnerCacheInfo,
+                        ssh: ssh,
+                        runnerVersion: runnerVersion
+                    )
                 }
                 let commands = provisioner.script(
                     config: githubConfig,
                     runnerToken: token,
+                    runnerVersion: runnerVersion,
                     cacheDirectory: runnerCacheInfo?.name
                 )
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
@@ -312,13 +321,33 @@ struct Runner: Sendable {
         return RunnerCacheInfo(hostPath: hostPath, name: name)
     }
 
-    private func preseedRunnerCacheIfPossible(cacheInfo: RunnerCacheInfo, ssh: SSHClient) async {
+    private func resolveRunnerVersion(cacheInfo: RunnerCacheInfo?) async throws -> String {
+        do {
+            let version = try await runnerVersionResolver.latestVersion()
+            logger.info("resolved latest Actions runner version: \(version)")
+            return version
+        } catch {
+            guard let cacheInfo,
+                  let cachedVersion = GitHubRunnerVersionResolver.newestCachedVersion(in: cacheInfo.hostPath) else {
+                logger.error("failed to resolve latest Actions runner version: \(String(describing: error))")
+                throw error
+            }
+            logger.warning("failed to resolve latest Actions runner version; using cached version \(cachedVersion): \(String(describing: error))")
+            return cachedVersion
+        }
+    }
+
+    private func preseedRunnerCacheIfPossible(
+        cacheInfo: RunnerCacheInfo,
+        ssh: SSHClient,
+        runnerVersion: String
+    ) async {
         let missing = DependencyChecker.missingCommands(["scp"])
         if !missing.isEmpty {
             logger.warning("runner cache preseed skipped: missing scp in PATH")
             return
         }
-        let assetName = await resolveRunnerAssetName(ssh: ssh)
+        let assetName = await resolveRunnerAssetName(ssh: ssh, runnerVersion: runnerVersion)
         guard let assetName else {
             logger.warning("runner cache preseed skipped: unable to resolve runner asset name")
             return
@@ -342,7 +371,7 @@ struct Runner: Sendable {
         }
     }
 
-    private func resolveRunnerAssetName(ssh: SSHClient) async -> String? {
+    private func resolveRunnerAssetName(ssh: SSHClient, runnerVersion: String) async -> String? {
         do {
             guard let result = try await ssh.exec(command: "uname -s; uname -m") else {
                 return nil
@@ -354,7 +383,11 @@ struct Runner: Sendable {
             guard lines.count >= 2 else {
                 return nil
             }
-            return GitHubProvisioner.runnerAssetName(os: lines[0], arch: lines[1])
+            return GitHubProvisioner.runnerAssetName(
+                os: lines[0],
+                arch: lines[1],
+                version: runnerVersion
+            )
         } catch {
             logger.warning("runner cache preseed failed to read OS/arch: \(String(describing: error))")
             return nil
