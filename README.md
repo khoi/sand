@@ -5,8 +5,16 @@ Self-hosted macOS CI Runners powered by Tart - Apple's Virtualization framework.
 ## Requirements
 
 - macOS 15+ running on Apple Silicon machines.
-- Tart installed and available in PATH 
+- Tart installed and available in PATH
 - sand uses tart. it helps understanding tart before using sand (https://tart.run/quick-start/)
+
+## Caveats
+
+macOS DHCP leases last 24 hours by default, causing IP exhaustion if you run more than ~253 VMs per day. To reduce lease time to 10 minutes:
+
+```
+sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.InternetSharing.default.plist bootpd -dict DHCPLeaseTimeSecs -int 600
+```
 
 ## Install
 
