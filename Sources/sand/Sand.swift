@@ -67,7 +67,7 @@ struct Run: AsyncParsableCommand {
             let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level, sink: logSink))
             let shutdownLogger = Logger(label: "sand.shutdown.\(runnerIndex)", minimumLevel: level, sink: logSink)
             let destroyer = VMDestroyer(tart: tart, logger: shutdownLogger)
-            let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer)
+            let shutdownCoordinator = VMShutdownCoordinator(destroyer: destroyer, logger: shutdownLogger)
             let runnerControl = RunnerControl()
             cleanupTargets.append(shutdownCoordinator)
             runnerControls.append(runnerControl)
@@ -101,7 +101,7 @@ struct Run: AsyncParsableCommand {
             for coordinator in cleanupTargets {
                 group.enter()
                 Task {
-                    await coordinator.cleanup()
+                    await coordinator.cleanup(reason: "signal shutdown")
                     group.leave()
                 }
             }

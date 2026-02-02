@@ -57,12 +57,22 @@ struct Runner: Sendable {
                 return
             }
             for _ in 0..<stopAfter {
-                try await runOnce()
+                do {
+                    try await runOnce()
+                } catch {
+                    logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
+                    throw error
+                }
             }
             return
         }
         while true {
-            try await runOnce()
+            do {
+                try await runOnce()
+            } catch {
+                logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
+                throw error
+            }
         }
     }
 
@@ -75,7 +85,12 @@ struct Runner: Sendable {
         let provisionerConfig = config.provisioner
         let source = vm.source.resolvedSource
         logger.info("prepare source \(source)")
-        try await tart.prepare(source: source)
+        do {
+            try await tart.prepare(source: source)
+        } catch {
+            logger.error("prepare source \(source) failed: \(String(describing: error))")
+            throw error
+        }
         do {
             if try await tart.isRunning(name: name) {
                 logger.info("VM \(name) already running, stopping before boot")
@@ -85,12 +100,17 @@ struct Runner: Sendable {
             logger.warning("preflight cleanup failed: \(String(describing: error))")
         }
         logger.info("clone VM \(name) from \(source)")
-        try await tart.clone(source: source, name: name)
+        do {
+            try await tart.clone(source: source, name: name)
+        } catch {
+            logger.error("clone VM \(name) from \(source) failed: \(String(describing: error))")
+            throw error
+        }
         await shutdownCoordinator.activate(name: name)
         do {
             try await applyVMConfigIfNeeded(name: name, vm: vm)
         } catch {
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "apply VM config failed")
             throw error
         }
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
@@ -110,7 +130,7 @@ struct Runner: Sendable {
             try await tart.run(name: name, options: runOptions)
         } catch {
             logger.error("tart run failed for \(name): \(String(describing: error))")
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "tart run failed")
             throw error
         }
         await logVMStatusAfterBoot(name: name)
@@ -119,7 +139,7 @@ struct Runner: Sendable {
         do {
             ip = try await resolveIP(name: name)
         } catch {
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "resolve VM IP failed")
             throw error
         }
         logger.info("VM IP \(ip)")
@@ -127,7 +147,7 @@ struct Runner: Sendable {
         guard await waitForSSH(ssh: ssh) else {
             logger.debug("waitForSSH failed; scheduling restart")
             await scheduleRestart(reason: .sshNotReady)
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "ssh not ready")
             return
         }
         if let preRun = config.preRun {
@@ -142,10 +162,10 @@ struct Runner: Sendable {
                 logger.info("preRun finished")
             } catch {
                 if await handleStageFailure(error, stage: "preRun", healthCheckState: nil) {
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "preRun failed")
                     return
                 }
-                await shutdownCoordinator.cleanup()
+                await shutdownCoordinator.cleanup(reason: "preRun failed")
                 throw error
             }
         }
@@ -178,16 +198,16 @@ struct Runner: Sendable {
                 case let .failed(error):
                     if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         await stopHealthCheck(healthCheckTask)
-                        await shutdownCoordinator.cleanup()
+                        await shutdownCoordinator.cleanup(reason: "provisioner failed")
                         return
                     }
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "provisioner failed")
                     throw error
                 case let .healthCheckFailed(message):
                     await scheduleRestart(reason: .healthCheckFailed(message))
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
                     return
                 }
             case .github:
@@ -216,32 +236,32 @@ struct Runner: Sendable {
                     logger.warning("github provisioner completed; runner exited, restarting VM")
                     await scheduleRestart(reason: .provisionerExited)
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "provisioner exited")
                     return
                 case let .failed(error):
                     if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         await stopHealthCheck(healthCheckTask)
-                        await shutdownCoordinator.cleanup()
+                        await shutdownCoordinator.cleanup(reason: "provisioner failed")
                         return
                     }
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "provisioner failed")
                     throw error
                 case let .healthCheckFailed(message):
                     await scheduleRestart(reason: .healthCheckFailed(message))
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
                     return
                 }
             }
         } catch {
             if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                 await stopHealthCheck(healthCheckTask)
-                await shutdownCoordinator.cleanup()
+                await shutdownCoordinator.cleanup(reason: "provisioner failed")
                 return
             }
             await stopHealthCheck(healthCheckTask)
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "provisioner failed")
             throw error
         }
         if let postRun = config.postRun {
@@ -257,23 +277,23 @@ struct Runner: Sendable {
             } catch {
                 if await handleStageFailure(error, stage: "postRun", healthCheckState: healthCheckState) {
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup()
+                    await shutdownCoordinator.cleanup(reason: "postRun failed")
                     return
                 }
                 await stopHealthCheck(healthCheckTask)
-                await shutdownCoordinator.cleanup()
+                await shutdownCoordinator.cleanup(reason: "postRun failed")
                 throw error
             }
         }
         if let message = await healthCheckState.failureMessage() {
             await scheduleRestart(reason: .healthCheckFailed(message))
             await stopHealthCheck(healthCheckTask)
-            await shutdownCoordinator.cleanup()
+            await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
             return
         }
         await restartBackoff.reset()
         await stopHealthCheck(healthCheckTask)
-        await shutdownCoordinator.cleanup()
+        await shutdownCoordinator.cleanup(reason: "runOnce complete")
         logger.debug("runOnce complete (vm=\(vmName))")
     }
 
@@ -412,15 +432,23 @@ struct Runner: Sendable {
         var attempt = 0
         var stoppedChecks = 0
         let maxRetries = ssh.config.connectMaxRetries
+        var lastStatus: Tart.VMStatus?
+        var lastStatusError: String?
+        var lastSSHError: String?
         logger.debug("waitForSSH start (vm=\(vmName), maxRetries=\(maxRetries.map(String.init) ?? "nil"))")
         while true {
             if let maxRetries, attempt >= maxRetries {
-                logger.warning("SSH not ready after \(maxRetries) attempts, restarting VM")
+                let statusLabel = lastStatus.map(statusLabel) ?? "unknown"
+                let statusErrorLabel = lastStatusError ?? "none"
+                let sshErrorLabel = lastSSHError ?? "none"
+                logger.warning("SSH not ready after \(maxRetries) attempts (lastStatus=\(statusLabel), statusError=\(statusErrorLabel), sshError=\(sshErrorLabel)), restarting VM")
                 return false
             }
             attempt += 1
             do {
                 let status = try await tart.status(name: vmName)
+                lastStatus = status
+                lastStatusError = nil
                 logger.debug("waitForSSH attempt \(attempt): VM status \(statusLabel(status))")
                 if status != .running {
                     let reason = status == .missing ? "missing" : "stopped"
@@ -442,14 +470,17 @@ struct Runner: Sendable {
                     continue
                 }
             } catch {
+                lastStatusError = String(describing: error)
                 logger.warning("Failed to check VM \(vmName) running state: \(String(describing: error))")
             }
             do {
                 try await ssh.checkConnection()
                 stoppedChecks = 0
+                lastSSHError = nil
                 logger.info("SSH ready after \(attempt) attempt(s)")
                 return true
             } catch {
+                lastSSHError = String(describing: error)
                 logger.debug("SSH checkConnection failed (attempt \(attempt)): \(String(describing: error))")
                 if let maxRetries {
                     logger.info("SSH not ready, retrying in 1s (attempt \(attempt)/\(maxRetries))")
@@ -474,7 +505,14 @@ struct Runner: Sendable {
                 return try await tart.ip(name: name, wait: 180)
             } catch {
                 logger.warning("resolve VM IP failed (attempt \(attempt)): \(String(describing: error))")
+                do {
+                    let status = try await tart.status(name: name)
+                    logger.warning("VM \(name) status while resolving IP: \(statusLabel(status))")
+                } catch {
+                    logger.warning("Failed to check VM \(name) status while resolving IP: \(String(describing: error))")
+                }
                 if attempt >= 3 {
+                    logger.error("resolve VM IP failed after \(attempt) attempts; giving up")
                     throw error
                 }
                 try await Task.sleep(nanoseconds: nanos(from: 5))
