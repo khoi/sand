@@ -139,8 +139,10 @@ struct Runner: Sendable {
         do {
             ip = try await resolveIP(name: name)
         } catch {
+            logger.warning("resolve VM IP failed; scheduling restart: \(String(describing: error))")
+            await scheduleRestart(reason: .ipNotReady)
             await shutdownCoordinator.cleanup(reason: "resolve VM IP failed")
-            throw error
+            return
         }
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
