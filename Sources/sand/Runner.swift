@@ -900,7 +900,8 @@ struct Runner: Sendable {
         let prefixes = [
             "runner cache hit:",
             "runner cache miss:",
-            "runner cache populated:"
+            "runner cache populated:",
+            "runner cache unavailable:"
         ]
         for line in output.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
