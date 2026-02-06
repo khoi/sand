@@ -41,6 +41,12 @@ final class ConfigValidator {
                     message: "\(label): stopAfter is \(stopAfter); sand will exit immediately."
                 ))
             }
+            if let numberOfRunsUntilHostReboot = runner.numberOfRunsUntilHostReboot, numberOfRunsUntilHostReboot <= 0 {
+                issues.append(.init(
+                    severity: .error,
+                    message: "\(label): numberOfRunsUntilHostReboot must be greater than 0."
+                ))
+            }
             var runnerIssues: [ConfigValidationIssue] = []
             if let preRun = runner.preRun, preRun.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 runnerIssues.append(.init(severity: .error, message: "preRun must not be empty when provided."))

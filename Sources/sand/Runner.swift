@@ -26,6 +26,11 @@ struct Runner: Sendable {
         let name: String
     }
 
+    private enum RunOnceResult {
+        case completed(successfulRunsOnCurrentVM: Int)
+        case restarted
+    }
+
     init(
         tart: Tart,
         github: GitHubService?,
@@ -52,23 +57,46 @@ struct Runner: Sendable {
     }
 
     func run() async throws {
+        let reuseLimit = max(config.numberOfRunsUntilHostReboot ?? 1, 1)
+        var successfulRunsOnCurrentVM = 0
         if let stopAfter = config.stopAfter {
             guard stopAfter > 0 else {
                 return
             }
             for _ in 0..<stopAfter {
                 do {
-                    try await runOnce()
+                    let result = try await runOnce(
+                        reuseLimit: reuseLimit,
+                        successfulRunsOnCurrentVM: successfulRunsOnCurrentVM
+                    )
+                    switch result {
+                    case let .completed(nextSuccessfulRunsOnCurrentVM):
+                        successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
+                    case .restarted:
+                        successfulRunsOnCurrentVM = 0
+                    }
                 } catch {
                     logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
                     throw error
                 }
             }
+            if successfulRunsOnCurrentVM > 0 {
+                await shutdownCoordinator.cleanup(reason: "stopAfter complete")
+            }
             return
         }
         while true {
             do {
-                try await runOnce()
+                let result = try await runOnce(
+                    reuseLimit: reuseLimit,
+                    successfulRunsOnCurrentVM: successfulRunsOnCurrentVM
+                )
+                switch result {
+                case let .completed(nextSuccessfulRunsOnCurrentVM):
+                    successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
+                case .restarted:
+                    successfulRunsOnCurrentVM = 0
+                }
             } catch {
                 logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
                 throw error
@@ -76,43 +104,19 @@ struct Runner: Sendable {
         }
     }
 
-    private func runOnce() async throws {
+    private func runOnce(
+        reuseLimit: Int,
+        successfulRunsOnCurrentVM: Int
+    ) async throws -> RunOnceResult {
         let stopAfterLabel = config.stopAfter.map(String.init) ?? "nil"
-        logger.debug("runOnce start (vm=\(vmName), stopAfter=\(stopAfterLabel))")
+        logger.debug("runOnce start (vm=\(vmName), stopAfter=\(stopAfterLabel), reuseLimit=\(reuseLimit), successfulRunsOnCurrentVM=\(successfulRunsOnCurrentVM))")
         await applyRestartBackoffIfNeeded()
         let name = vmName
         let vm = config.vm
         let provisionerConfig = config.provisioner
         let source = vm.source.resolvedSource
-        logger.info("prepare source \(source)")
-        do {
-            try await tart.prepare(source: source)
-        } catch {
-            logger.error("prepare source \(source) failed: \(String(describing: error))")
-            throw error
-        }
-        do {
-            if try await tart.isRunning(name: name) {
-                logger.info("VM \(name) already running, stopping before boot")
-                try await tart.stop(name: name)
-            }
-        } catch {
-            logger.warning("preflight cleanup failed: \(String(describing: error))")
-        }
-        logger.info("clone VM \(name) from \(source)")
-        do {
-            try await tart.clone(source: source, name: name)
-        } catch {
-            logger.error("clone VM \(name) from \(source) failed: \(String(describing: error))")
-            throw error
-        }
-        await shutdownCoordinator.activate(name: name)
-        do {
-            try await applyVMConfigIfNeeded(name: name, vm: vm)
-        } catch {
-            await shutdownCoordinator.cleanup(reason: "apply VM config failed")
-            throw error
-        }
+        var runsOnCurrentVM = successfulRunsOnCurrentVM
+        var bootFreshVM = runsOnCurrentVM == 0
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
         if runnerCacheInfo == nil, config.provisioner.type == .github, config.vm.cache == nil {
             logger.info("runner cache disabled: missing vm.cache")
@@ -124,16 +128,76 @@ struct Runner: Sendable {
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard
         )
-        logRunOptions(name: name, options: runOptions)
-        logger.info("boot VM \(name)")
-        do {
-            try await tart.run(name: name, options: runOptions)
-        } catch {
-            logger.error("tart run failed for \(name): \(String(describing: error))")
-            await shutdownCoordinator.cleanup(reason: "tart run failed")
-            throw error
+        if !bootFreshVM {
+            await shutdownCoordinator.activate(name: name)
+            do {
+                let status = try await tart.status(name: name)
+                switch status {
+                case .running:
+                    logger.info("reuse VM \(name): already running")
+                case .stopped:
+                    logRunOptions(name: name, options: runOptions)
+                    logger.info("reuse VM \(name): boot stopped VM")
+                    do {
+                        try await tart.run(name: name, options: runOptions)
+                    } catch {
+                        logger.error("tart run failed for \(name): \(String(describing: error))")
+                        await shutdownCoordinator.cleanup(reason: "tart run failed")
+                        throw error
+                    }
+                    await logVMStatusAfterBoot(name: name)
+                case .missing:
+                    logger.info("reuse VM \(name): missing, boot fresh VM")
+                    runsOnCurrentVM = 0
+                    bootFreshVM = true
+                }
+            } catch {
+                logger.warning("reuse VM \(name): failed to read status, boot fresh VM: \(String(describing: error))")
+                runsOnCurrentVM = 0
+                bootFreshVM = true
+            }
         }
-        await logVMStatusAfterBoot(name: name)
+        if bootFreshVM {
+            logger.info("prepare source \(source)")
+            do {
+                try await tart.prepare(source: source)
+            } catch {
+                logger.error("prepare source \(source) failed: \(String(describing: error))")
+                throw error
+            }
+            do {
+                if try await tart.isRunning(name: name) {
+                    logger.info("VM \(name) already running, stopping before boot")
+                    try await tart.stop(name: name)
+                }
+            } catch {
+                logger.warning("preflight cleanup failed: \(String(describing: error))")
+            }
+            logger.info("clone VM \(name) from \(source)")
+            do {
+                try await tart.clone(source: source, name: name)
+            } catch {
+                logger.error("clone VM \(name) from \(source) failed: \(String(describing: error))")
+                throw error
+            }
+            await shutdownCoordinator.activate(name: name)
+            do {
+                try await applyVMConfigIfNeeded(name: name, vm: vm)
+            } catch {
+                await shutdownCoordinator.cleanup(reason: "apply VM config failed")
+                throw error
+            }
+            logRunOptions(name: name, options: runOptions)
+            logger.info("boot VM \(name)")
+            do {
+                try await tart.run(name: name, options: runOptions)
+            } catch {
+                logger.error("tart run failed for \(name): \(String(describing: error))")
+                await shutdownCoordinator.cleanup(reason: "tart run failed")
+                throw error
+            }
+            await logVMStatusAfterBoot(name: name)
+        }
         logger.info("wait for VM IP")
         let ip: String
         do {
@@ -142,7 +206,7 @@ struct Runner: Sendable {
             logger.warning("resolve VM IP failed; scheduling restart: \(String(describing: error))")
             await scheduleRestart(reason: .ipNotReady)
             await shutdownCoordinator.cleanup(reason: "resolve VM IP failed")
-            return
+            return .restarted
         }
         logger.info("VM IP \(ip)")
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
@@ -150,7 +214,7 @@ struct Runner: Sendable {
             logger.debug("waitForSSH failed; scheduling restart")
             await scheduleRestart(reason: .sshNotReady)
             await shutdownCoordinator.cleanup(reason: "ssh not ready")
-            return
+            return .restarted
         }
         if let preRun = config.preRun {
             logger.info("run preRun")
@@ -165,7 +229,7 @@ struct Runner: Sendable {
             } catch {
                 if await handleStageFailure(error, stage: "preRun", healthCheckState: nil) {
                     await shutdownCoordinator.cleanup(reason: "preRun failed")
-                    return
+                    return .restarted
                 }
                 await shutdownCoordinator.cleanup(reason: "preRun failed")
                 throw error
@@ -201,7 +265,7 @@ struct Runner: Sendable {
                     if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         await stopHealthCheck(healthCheckTask)
                         await shutdownCoordinator.cleanup(reason: "provisioner failed")
-                        return
+                        return .restarted
                     }
                     await stopHealthCheck(healthCheckTask)
                     await shutdownCoordinator.cleanup(reason: "provisioner failed")
@@ -210,7 +274,7 @@ struct Runner: Sendable {
                     await scheduleRestart(reason: .healthCheckFailed(message))
                     await stopHealthCheck(healthCheckTask)
                     await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
-                    return
+                    return .restarted
                 }
             case .github:
                 guard let github, let githubConfig = provisionerConfig.github else {
@@ -235,16 +299,24 @@ struct Runner: Sendable {
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
                 switch outcome {
                 case .completed:
-                    logger.warning("github provisioner completed; runner exited, restarting VM")
+                    let nextRunsOnCurrentVM = runsOnCurrentVM + 1
+                    let recycleAfterSuccess = nextRunsOnCurrentVM >= reuseLimit
+                    logger.warning("github provisioner completed; runner exited")
                     await scheduleRestart(reason: .provisionerExited)
                     await stopHealthCheck(healthCheckTask)
-                    await shutdownCoordinator.cleanup(reason: "provisioner exited")
-                    return
+                    if recycleAfterSuccess {
+                        await shutdownCoordinator.cleanup(reason: "provisioner exited; reached numberOfRunsUntilHostReboot")
+                        logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=0)")
+                        return .completed(successfulRunsOnCurrentVM: 0)
+                    }
+                    logger.info("reuse VM \(name): keeping current VM (\(nextRunsOnCurrentVM)/\(reuseLimit))")
+                    logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=\(nextRunsOnCurrentVM))")
+                    return .completed(successfulRunsOnCurrentVM: nextRunsOnCurrentVM)
                 case let .failed(error):
                     if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                         await stopHealthCheck(healthCheckTask)
                         await shutdownCoordinator.cleanup(reason: "provisioner failed")
-                        return
+                        return .restarted
                     }
                     await stopHealthCheck(healthCheckTask)
                     await shutdownCoordinator.cleanup(reason: "provisioner failed")
@@ -253,14 +325,14 @@ struct Runner: Sendable {
                     await scheduleRestart(reason: .healthCheckFailed(message))
                     await stopHealthCheck(healthCheckTask)
                     await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
-                    return
+                    return .restarted
                 }
             }
         } catch {
             if await handleStageFailure(error, stage: "provisioner", healthCheckState: healthCheckState) {
                 await stopHealthCheck(healthCheckTask)
                 await shutdownCoordinator.cleanup(reason: "provisioner failed")
-                return
+                return .restarted
             }
             await stopHealthCheck(healthCheckTask)
             await shutdownCoordinator.cleanup(reason: "provisioner failed")
@@ -280,7 +352,7 @@ struct Runner: Sendable {
                 if await handleStageFailure(error, stage: "postRun", healthCheckState: healthCheckState) {
                     await stopHealthCheck(healthCheckTask)
                     await shutdownCoordinator.cleanup(reason: "postRun failed")
-                    return
+                    return .restarted
                 }
                 await stopHealthCheck(healthCheckTask)
                 await shutdownCoordinator.cleanup(reason: "postRun failed")
@@ -291,12 +363,20 @@ struct Runner: Sendable {
             await scheduleRestart(reason: .healthCheckFailed(message))
             await stopHealthCheck(healthCheckTask)
             await shutdownCoordinator.cleanup(reason: "health check failed: \(message)")
-            return
+            return .restarted
         }
+        let nextRunsOnCurrentVM = runsOnCurrentVM + 1
+        let recycleAfterSuccess = nextRunsOnCurrentVM >= reuseLimit
         await restartBackoff.reset()
         await stopHealthCheck(healthCheckTask)
-        await shutdownCoordinator.cleanup(reason: "runOnce complete")
-        logger.debug("runOnce complete (vm=\(vmName))")
+        if recycleAfterSuccess {
+            await shutdownCoordinator.cleanup(reason: "runOnce complete; reached numberOfRunsUntilHostReboot")
+            logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=0)")
+            return .completed(successfulRunsOnCurrentVM: 0)
+        }
+        logger.info("reuse VM \(name): keeping current VM (\(nextRunsOnCurrentVM)/\(reuseLimit))")
+        logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=\(nextRunsOnCurrentVM))")
+        return .completed(successfulRunsOnCurrentVM: nextRunsOnCurrentVM)
     }
 
     private func applyVMConfigIfNeeded(name: String, vm: Config.VM) async throws {
