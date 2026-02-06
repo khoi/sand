@@ -57,6 +57,13 @@ actor RestartBackoff {
 
     @discardableResult
     func schedule(reason: RestartReason) -> TimeInterval {
+        if reason == .provisionerExited {
+            attempt = 0
+            pendingDelay = 0
+            pendingReason = reason
+            lastReason = nil
+            return 0
+        }
         if let lastReason, lastReason == reason {
             attempt += 1
         } else {
