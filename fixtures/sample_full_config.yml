@@ -1,7 +1,6 @@
 runners:
   - name: runner-1
     stopAfter: null
-    numberOfRunsUntilHostReboot: null
     vm:
       source:
         type: oci
@@ -44,7 +43,6 @@ runners:
       delay: 60
   - name: runner-2
     stopAfter: null
-    numberOfRunsUntilHostReboot: 3
     vm:
       source:
         type: oci

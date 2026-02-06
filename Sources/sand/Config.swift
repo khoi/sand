@@ -308,7 +308,6 @@ struct Config: Decodable, Sendable {
         let preRun: String?
         let postRun: String?
         let stopAfter: Int?
-        let numberOfRunsUntilHostReboot: Int?
         let healthCheck: HealthCheck?
     }
 
@@ -335,7 +334,6 @@ struct Config: Decodable, Sendable {
                 preRun: runner.preRun,
                 postRun: runner.postRun,
                 stopAfter: runner.stopAfter,
-                numberOfRunsUntilHostReboot: runner.numberOfRunsUntilHostReboot,
                 healthCheck: runner.healthCheck
             )
         }

@@ -29,7 +29,6 @@ final class ConfigValidatorTests: XCTestCase {
             preRun: nil,
             postRun: nil,
             stopAfter: 1,
-            numberOfRunsUntilHostReboot: 3,
             healthCheck: Config.HealthCheck(command: "true")
         )
         let config = Config(runners: [runner])
@@ -59,13 +58,11 @@ final class ConfigValidatorTests: XCTestCase {
             preRun: nil,
             postRun: nil,
             stopAfter: 0,
-            numberOfRunsUntilHostReboot: 0,
             healthCheck: Config.HealthCheck(command: "  ", interval: 0, delay: -1)
         )
         let config = Config(runners: [runner])
         let issues = ConfigValidator().validate(config)
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .warning, message: "runner runner-1: stopAfter is 0; sand will exit immediately.")))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: numberOfRunsUntilHostReboot must be greater than 0.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: Local VM path does not exist: /missing-vm.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.ramGb must be greater than 0.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.cpuCores must be greater than 0.")))
@@ -94,8 +91,8 @@ final class ConfigValidatorTests: XCTestCase {
         )
         let provisioner = Config.Provisioner(type: .script, script: .init(run: "echo hi"), github: nil)
         let runners = [
-            Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, numberOfRunsUntilHostReboot: nil, healthCheck: nil),
-            Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, numberOfRunsUntilHostReboot: nil, healthCheck: nil)
+            Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, healthCheck: nil),
+            Config.RunnerConfig(name: "same", vm: vm, provisioner: provisioner, preRun: nil, postRun: nil, stopAfter: nil, healthCheck: nil)
         ]
         let config = Config(runners: runners)
         let issues = ConfigValidator().validate(config)
@@ -120,7 +117,6 @@ final class ConfigValidatorTests: XCTestCase {
             preRun: nil,
             postRun: nil,
             stopAfter: nil,
-            numberOfRunsUntilHostReboot: nil,
             healthCheck: nil
         )
         let issues = ConfigValidator().validate(Config(runners: [runner]))

@@ -8,7 +8,6 @@ final class ConfigTests: XCTestCase {
         runners:
           - name: runner-1
             stopAfter: 1
-            numberOfRunsUntilHostReboot: 3
             vm:
               source:
                 type: local
@@ -55,7 +54,6 @@ final class ConfigTests: XCTestCase {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         XCTAssertEqual(config.runners.count, 1)
         XCTAssertEqual(config.runners.first?.stopAfter, 1)
-        XCTAssertEqual(config.runners.first?.numberOfRunsUntilHostReboot, 3)
         XCTAssertEqual(config.runners.first?.vm.hardware?.ramGb, 4)
         XCTAssertEqual(config.runners.first?.vm.source.type, .local)
         XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "file://\(home)/vm")
@@ -122,7 +120,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.runners.first?.provisioner.script?.run.contains("Hello World") ?? false)
         XCTAssertEqual(config.runners.first?.healthCheck?.interval, 30)
         XCTAssertEqual(config.runners.first?.healthCheck?.delay, 60)
-        XCTAssertNil(config.runners.first?.numberOfRunsUntilHostReboot)
     }
 
     func testExplicitRunnersConfig() throws {
@@ -165,7 +162,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.name, "runner-a")
         XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "file://\(home)/vm-a")
         XCTAssertEqual(config.runners.last?.stopAfter, 2)
-        XCTAssertNil(config.runners.last?.numberOfRunsUntilHostReboot)
         XCTAssertEqual(config.runners.last?.vm.source.resolvedSource, "file://\(home)/vm-b")
         XCTAssertEqual(config.runners.first?.healthCheck?.command, "true")
     }

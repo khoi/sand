@@ -118,7 +118,6 @@ Create a `config.yml` and run the CLI with `--config`.
 ```
 runners:
   - name: runner-1
-    numberOfRunsUntilHostReboot: 5
     vm:
       source:
         type: oci
@@ -154,7 +153,6 @@ Common pitfalls:
 ```
 runners:
   - name: runner-1
-    numberOfRunsUntilHostReboot: 2
     vm:
       source:
         type: oci
@@ -175,8 +173,6 @@ runners:
 ```
 
 If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
-
-`numberOfRunsUntilHostReboot` controls VM reuse for runner relaunches. `1` keeps current behavior (recreate VM every cycle). Values greater than `1` reuse the same VM for that many successful cycles before sand performs a full stop/delete/clone/boot refresh.
 
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml) or [fixtures/sample_on_prod.yml](fixtures/sample_on_prod.yml)
 
