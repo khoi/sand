@@ -57,7 +57,9 @@ struct Runner: Sendable {
     }
 
     func run() async throws {
-        let reuseLimit = max(config.numberOfRunsUntilHostReboot ?? 1, 1)
+        let configuredReuseLimit = config.numberOfRunsUntilHostReboot ?? 1
+        let reuseLimit = max(configuredReuseLimit, 1)
+        logger.info("runner lifecycle config: numberOfRunsUntilHostReboot=\(configuredReuseLimit), effectiveReuseLimit=\(reuseLimit), stopAfter=\(config.stopAfter.map(String.init) ?? "nil")")
         var successfulRunsOnCurrentVM = 0
         if let stopAfter = config.stopAfter {
             guard stopAfter > 0 else {
@@ -71,8 +73,10 @@ struct Runner: Sendable {
                     )
                     switch result {
                     case let .completed(nextSuccessfulRunsOnCurrentVM):
+                        logger.info("runOnce result: completed (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> \(nextSuccessfulRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
                         successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
                     case .restarted:
+                        logger.info("runOnce result: restarted (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> 0, reuseLimit=\(reuseLimit))")
                         successfulRunsOnCurrentVM = 0
                     }
                 } catch {
@@ -93,8 +97,10 @@ struct Runner: Sendable {
                 )
                 switch result {
                 case let .completed(nextSuccessfulRunsOnCurrentVM):
+                    logger.info("runOnce result: completed (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> \(nextSuccessfulRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
                     successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
                 case .restarted:
+                    logger.info("runOnce result: restarted (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> 0, reuseLimit=\(reuseLimit))")
                     successfulRunsOnCurrentVM = 0
                 }
             } catch {
@@ -117,6 +123,8 @@ struct Runner: Sendable {
         let source = vm.source.resolvedSource
         var runsOnCurrentVM = successfulRunsOnCurrentVM
         var bootFreshVM = runsOnCurrentVM == 0
+        var lifecycleReason = bootFreshVM ? "no successful runs on current VM" : "reuse VM after successful runs"
+        logger.info("vm lifecycle decision start: vm=\(name), bootFreshVM=\(bootFreshVM), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit), reason=\(lifecycleReason)")
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
         if runnerCacheInfo == nil, config.provisioner.type == .github, config.vm.cache == nil {
             logger.info("runner cache disabled: missing vm.cache")
@@ -132,6 +140,7 @@ struct Runner: Sendable {
             await shutdownCoordinator.activate(name: name)
             do {
                 let status = try await tart.status(name: name)
+                logger.info("reuse VM \(name): current status=\(statusLabel(status)), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit)")
                 switch status {
                 case .running:
                     logger.info("reuse VM \(name): already running")
@@ -150,14 +159,17 @@ struct Runner: Sendable {
                     logger.info("reuse VM \(name): missing, boot fresh VM")
                     runsOnCurrentVM = 0
                     bootFreshVM = true
+                    lifecycleReason = "reusable VM missing"
                 }
             } catch {
                 logger.warning("reuse VM \(name): failed to read status, boot fresh VM: \(String(describing: error))")
                 runsOnCurrentVM = 0
                 bootFreshVM = true
+                lifecycleReason = "failed to read reusable VM status"
             }
         }
         if bootFreshVM {
+            logger.info("vm lifecycle decision: boot fresh VM (reason=\(lifecycleReason), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit))")
             logger.info("prepare source \(source)")
             do {
                 try await tart.prepare(source: source)
@@ -197,6 +209,8 @@ struct Runner: Sendable {
                 throw error
             }
             await logVMStatusAfterBoot(name: name)
+        } else {
+            logger.info("vm lifecycle decision: reuse existing VM (successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit))")
         }
         logger.info("wait for VM IP")
         let ip: String
@@ -301,11 +315,12 @@ struct Runner: Sendable {
                 case .completed:
                     let nextRunsOnCurrentVM = runsOnCurrentVM + 1
                     let recycleAfterSuccess = nextRunsOnCurrentVM >= reuseLimit
-                    logger.warning("github provisioner completed; runner exited")
+                    logger.warning("github runner exited; scheduling relaunch (nextSuccessfulRuns=\(nextRunsOnCurrentVM), reuseLimit=\(reuseLimit), recycleAfterSuccess=\(recycleAfterSuccess))")
                     await scheduleRestart(reason: .provisionerExited)
                     await stopHealthCheck(healthCheckTask)
                     if recycleAfterSuccess {
                         await shutdownCoordinator.cleanup(reason: "provisioner exited; reached numberOfRunsUntilHostReboot")
+                        logger.info("vm lifecycle decision: hard recycle after github runner exit (nextSuccessfulRuns=\(nextRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
                         logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=0)")
                         return .completed(successfulRunsOnCurrentVM: 0)
                     }
@@ -371,6 +386,7 @@ struct Runner: Sendable {
         await stopHealthCheck(healthCheckTask)
         if recycleAfterSuccess {
             await shutdownCoordinator.cleanup(reason: "runOnce complete; reached numberOfRunsUntilHostReboot")
+            logger.info("vm lifecycle decision: hard recycle at cycle boundary (nextSuccessfulRuns=\(nextRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
             logger.debug("runOnce complete (vm=\(vmName), successfulRunsOnCurrentVM=0)")
             return .completed(successfulRunsOnCurrentVM: 0)
         }
