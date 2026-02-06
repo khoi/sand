@@ -73,10 +73,8 @@ struct Runner: Sendable {
                     )
                     switch result {
                     case let .completed(nextSuccessfulRunsOnCurrentVM):
-                        logger.info("runOnce result: completed (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> \(nextSuccessfulRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
                         successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
                     case .restarted:
-                        logger.info("runOnce result: restarted (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> 0, reuseLimit=\(reuseLimit))")
                         successfulRunsOnCurrentVM = 0
                     }
                 } catch {
@@ -97,10 +95,8 @@ struct Runner: Sendable {
                 )
                 switch result {
                 case let .completed(nextSuccessfulRunsOnCurrentVM):
-                    logger.info("runOnce result: completed (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> \(nextSuccessfulRunsOnCurrentVM), reuseLimit=\(reuseLimit))")
                     successfulRunsOnCurrentVM = nextSuccessfulRunsOnCurrentVM
                 case .restarted:
-                    logger.info("runOnce result: restarted (successfulRunsOnCurrentVM \(successfulRunsOnCurrentVM) -> 0, reuseLimit=\(reuseLimit))")
                     successfulRunsOnCurrentVM = 0
                 }
             } catch {
@@ -123,8 +119,6 @@ struct Runner: Sendable {
         let source = vm.source.resolvedSource
         var runsOnCurrentVM = successfulRunsOnCurrentVM
         var bootFreshVM = runsOnCurrentVM == 0
-        var lifecycleReason = bootFreshVM ? "no successful runs on current VM" : "reuse VM after successful runs"
-        logger.info("vm lifecycle decision start: vm=\(name), bootFreshVM=\(bootFreshVM), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit), reason=\(lifecycleReason)")
         let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
         if runnerCacheInfo == nil, config.provisioner.type == .github, config.vm.cache == nil {
             logger.info("runner cache disabled: missing vm.cache")
@@ -140,7 +134,6 @@ struct Runner: Sendable {
             await shutdownCoordinator.activate(name: name)
             do {
                 let status = try await tart.status(name: name)
-                logger.info("reuse VM \(name): current status=\(statusLabel(status)), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit)")
                 switch status {
                 case .running:
                     logger.info("reuse VM \(name): already running")
@@ -159,17 +152,14 @@ struct Runner: Sendable {
                     logger.info("reuse VM \(name): missing, boot fresh VM")
                     runsOnCurrentVM = 0
                     bootFreshVM = true
-                    lifecycleReason = "reusable VM missing"
                 }
             } catch {
                 logger.warning("reuse VM \(name): failed to read status, boot fresh VM: \(String(describing: error))")
                 runsOnCurrentVM = 0
                 bootFreshVM = true
-                lifecycleReason = "failed to read reusable VM status"
             }
         }
         if bootFreshVM {
-            logger.info("vm lifecycle decision: boot fresh VM (reason=\(lifecycleReason), successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit))")
             logger.info("prepare source \(source)")
             do {
                 try await tart.prepare(source: source)
@@ -209,8 +199,6 @@ struct Runner: Sendable {
                 throw error
             }
             await logVMStatusAfterBoot(name: name)
-        } else {
-            logger.info("vm lifecycle decision: reuse existing VM (successfulRunsOnCurrentVM=\(runsOnCurrentVM), reuseLimit=\(reuseLimit))")
         }
         logger.info("wait for VM IP")
         let ip: String
