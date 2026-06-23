@@ -32,8 +32,9 @@ struct Tart: Sendable {
         let noAudio: Bool
         let noGraphics: Bool
         let noClipboard: Bool
+        let nested: Bool
 
-        static let `default` = RunOptions(directoryMounts: [], noAudio: false, noGraphics: true, noClipboard: false)
+        static let `default` = RunOptions(directoryMounts: [], noAudio: false, noGraphics: true, noClipboard: false, nested: false)
     }
 
     struct Display {
@@ -112,6 +113,9 @@ struct Tart: Sendable {
         }
         if options.noClipboard {
             arguments.append("--no-clipboard")
+        }
+        if options.nested {
+            arguments.append("--nested")
         }
         for mount in options.directoryMounts {
             arguments.append("--dir")

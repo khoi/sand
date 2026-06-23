@@ -25,6 +25,7 @@ final class ConfigTests: XCTestCase {
               run:
                 noGraphics: false
                 noClipboard: true
+                nested: true
               diskSizeGb: 80
               ssh:
                 user: admin
@@ -65,6 +66,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.vm.mounts.first?.mode, .ro)
         XCTAssertEqual(config.runners.first?.vm.run.noGraphics, false)
         XCTAssertEqual(config.runners.first?.vm.run.noClipboard, true)
+        XCTAssertEqual(config.runners.first?.vm.run.nested, true)
         XCTAssertEqual(config.runners.first?.vm.diskSizeGb, 80)
         XCTAssertEqual(config.runners.first?.vm.ssh.user, "admin")
         XCTAssertEqual(config.runners.first?.vm.ssh.password, "admin")
@@ -112,6 +114,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "ghcr.io/acme/vm:latest")
         XCTAssertEqual(config.runners.first?.vm.run.noGraphics, true)
         XCTAssertEqual(config.runners.first?.vm.run.noClipboard, false)
+        XCTAssertEqual(config.runners.first?.vm.run.nested, false)
         XCTAssertEqual(config.runners.first?.vm.ssh.user, "runner")
         XCTAssertEqual(config.runners.first?.vm.ssh.password, "secret")
         XCTAssertEqual(config.runners.first?.vm.ssh.port, 2222)

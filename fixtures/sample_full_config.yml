@@ -22,6 +22,7 @@ runners:
       run:
         noGraphics: true
         noClipboard: false
+        nested: false
       diskSizeGb: null
       ssh:
         user: admin
