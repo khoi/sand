@@ -108,6 +108,30 @@ sand run --config config.yml --log-file /tmp/sand.log
 
 Create a `config.yml` and run the CLI with `--config`. 
 
+### VM source
+
+`vm.source` selects the base VM that sand clones for each ephemeral runner.
+
+OCI image pulled from a registry:
+
+```
+vm:
+  source:
+    type: oci
+    image: ghcr.io/cirruslabs/macos-runner:tahoe
+```
+
+Existing local Tart VM, referenced by name (as shown by `tart list`):
+
+```
+vm:
+  source:
+    type: local
+    name: expo-runner
+```
+
+For `local` sources sand skips the registry pull and clones the named VM directly (`tart clone <name> <ephemeral>`), so the VM must already exist in `~/.tart/vms`.
+
 ### GitHub Actions setup
 
 1) Create a GitHub App and grant `Self-hosted runners` permission set to `Read & Write` at the organization level. https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app

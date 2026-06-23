@@ -61,12 +61,12 @@ struct Config: Decodable, Sendable {
 
         let type: SourceType
         let image: String?
-        let path: String?
+        let name: String?
 
-        init(type: SourceType, image: String?, path: String?) {
+        init(type: SourceType, image: String?, name: String?) {
             self.type = type
             self.image = image
-            self.path = path
+            self.name = name
         }
 
         var resolvedSource: String {
@@ -74,7 +74,7 @@ struct Config: Decodable, Sendable {
             case .oci:
                 return image ?? ""
             case .local:
-                return Config.expandFileURL(path ?? "")
+                return name ?? ""
             }
         }
 
@@ -82,7 +82,7 @@ struct Config: Decodable, Sendable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.type = try container.decode(SourceType.self, forKey: .type)
             self.image = try container.decodeIfPresent(String.self, forKey: .image)
-            self.path = try container.decodeIfPresent(String.self, forKey: .path)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
 
             switch type {
             case .oci:
@@ -90,8 +90,8 @@ struct Config: Decodable, Sendable {
                     throw DecodingError.dataCorruptedError(forKey: .image, in: container, debugDescription: "OCI source requires image")
                 }
             case .local:
-                if (path ?? "").isEmpty {
-                    throw DecodingError.dataCorruptedError(forKey: .path, in: container, debugDescription: "Local source requires path")
+                if (name ?? "").isEmpty {
+                    throw DecodingError.dataCorruptedError(forKey: .name, in: container, debugDescription: "Local source requires name")
                 }
             }
         }
@@ -99,7 +99,7 @@ struct Config: Decodable, Sendable {
         private enum CodingKeys: String, CodingKey {
             case type
             case image
-            case path
+            case name
         }
     }
 
@@ -345,14 +345,9 @@ struct Config: Decodable, Sendable {
     }
 
     private func expandVM(_ vm: VM) -> VM {
-        let vmSource: VMSource
-        switch vm.source.type {
-        case .oci:
-            vmSource = vm.source
-        case .local:
-            let expandedPath = Config.expandFileURL(vm.source.path ?? "")
-            vmSource = VMSource(type: .local, image: nil, path: expandedPath)
-        }
+        // OCI images and local VM names are passed to tart as-is; only host
+        // filesystem paths (mounts, cache) need tilde expansion.
+        let vmSource = vm.source
 
         let mounts = vm.mounts.map { mount in
             DirectoryMount(
@@ -383,15 +378,6 @@ struct Config: Decodable, Sendable {
             return (path as NSString).expandingTildeInPath
         }
         return path
-    }
-
-    static func expandFileURL(_ path: String) -> String {
-        let prefix = "file://"
-        if path.hasPrefix(prefix) {
-            let rawPath = String(path.dropFirst(prefix.count))
-            return prefix + expandPath(rawPath)
-        }
-        return prefix + expandPath(path)
     }
 
     static func resolveMountName(hostPath: String, name: String?) -> String {

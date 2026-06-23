@@ -48,8 +48,12 @@ struct Run: AsyncParsableCommand {
                 let logLabel = runnerName.isEmpty ? "runner\(runnerIndex)" : runnerName
                 let tart = Tart(processRunner: processRunner, logger: Logger(label: "tart.\(logLabel)", minimumLevel: level, sink: logSink))
                 let source = runnerConfig.vm.source.resolvedSource
-                logger.info("dry-run: prepare source \(source) for \(logLabel)")
-                try await tart.prepare(source: source)
+                if runnerConfig.vm.source.type == .oci {
+                    logger.info("dry-run: prepare source \(source) for \(logLabel)")
+                    try await tart.prepare(source: source)
+                } else {
+                    logger.info("dry-run: local source \(source) for \(logLabel); skipping registry pull")
+                }
             }
             logger.info("dry-run complete")
             return

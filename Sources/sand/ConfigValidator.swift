@@ -72,11 +72,8 @@ final class ConfigValidator {
                 issues.append(.init(severity: .error, message: "vm.source.image is required for OCI sources."))
             }
         case .local:
-            let path = stripFilePrefix(vm.source.resolvedSource)
-            if path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                issues.append(.init(severity: .error, message: "vm.source.path is required for local sources."))
-            } else if !FileManager.default.fileExists(atPath: path) {
-                issues.append(.init(severity: .error, message: "Local VM path does not exist: \(path)."))
+            if (vm.source.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                issues.append(.init(severity: .error, message: "vm.source.name is required for local sources."))
             }
         }
 
@@ -198,14 +195,6 @@ final class ConfigValidator {
         }
         let resolvedName = Config.resolveMountName(hostPath: cache.hostPath, name: cache.name)
         validateMountName(resolvedName, label: "vm.cache.name", issues: &issues)
-    }
-
-    private func stripFilePrefix(_ path: String) -> String {
-        let prefix = "file://"
-        if path.hasPrefix(prefix) {
-            return String(path.dropFirst(prefix.count))
-        }
-        return path
     }
 
     private func validateMountName(_ name: String, label: String, issues: inout [ConfigValidationIssue]) {

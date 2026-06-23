@@ -57,12 +57,10 @@ struct Tart: Sendable {
     }
 
     func prepare(source: String) async throws {
-        if isOCISource(source) {
-            if try await hasOCI(source: source) {
-                return
-            }
-            try await pull(source: source)
+        if try await hasOCI(source: source) {
+            return
         }
+        try await pull(source: source)
     }
 
     func pull(source: String) async throws {
@@ -159,13 +157,6 @@ struct Tart: Sendable {
             return .running
         }
         return .stopped
-    }
-
-    private func isOCISource(_ source: String) -> Bool {
-        if source.hasPrefix("file://") {
-            return false
-        }
-        return true
     }
 
     private func hasOCI(source: String) async throws -> Bool {

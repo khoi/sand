@@ -11,7 +11,7 @@ final class ConfigTests: XCTestCase {
             vm:
               source:
                 type: local
-                path: ~/vm
+                name: my-vm
               hardware:
                 ramGb: 4
                 display:
@@ -57,7 +57,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.first?.stopAfter, 1)
         XCTAssertEqual(config.runners.first?.vm.hardware?.ramGb, 4)
         XCTAssertEqual(config.runners.first?.vm.source.type, .local)
-        XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "file://\(home)/vm")
+        XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "my-vm")
         XCTAssertEqual(config.runners.first?.vm.mounts.first?.hostPath, "\(home)/cache")
         XCTAssertEqual(Config.resolveMountName(
             hostPath: config.runners.first?.vm.mounts.first?.hostPath ?? "",
@@ -132,7 +132,7 @@ final class ConfigTests: XCTestCase {
             vm:
               source:
                 type: local
-                path: ~/vm-a
+                name: vm-a
               ssh:
                 user: admin
                 password: admin
@@ -148,7 +148,7 @@ final class ConfigTests: XCTestCase {
             vm:
               source:
                 type: local
-                path: ~/vm-b
+                name: vm-b
               ssh:
                 user: admin
                 password: admin
@@ -160,12 +160,11 @@ final class ConfigTests: XCTestCase {
         """
         let url = try writeTempFile(contents: yaml)
         let config = try Config.load(path: url.path)
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
         XCTAssertEqual(config.runners.count, 2)
         XCTAssertEqual(config.runners.first?.name, "runner-a")
-        XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "file://\(home)/vm-a")
+        XCTAssertEqual(config.runners.first?.vm.source.resolvedSource, "vm-a")
         XCTAssertEqual(config.runners.last?.stopAfter, 2)
-        XCTAssertEqual(config.runners.last?.vm.source.resolvedSource, "file://\(home)/vm-b")
+        XCTAssertEqual(config.runners.last?.vm.source.resolvedSource, "vm-b")
         XCTAssertEqual(config.runners.first?.healthCheck?.command, "true")
     }
 }

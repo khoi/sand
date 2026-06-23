@@ -6,7 +6,7 @@ final class ConfigValidatorTests: XCTestCase {
     func testValidConfigHasNoIssues() throws {
         let keyURL = try writeTempFile(contents: "key", suffix: ".pem")
         let vm = Config.VM(
-            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
             hardware: nil,
             mounts: [],
             cache: Config.Cache(hostPath: "/tmp/sand-cache", name: "sand-cache"),
@@ -38,7 +38,7 @@ final class ConfigValidatorTests: XCTestCase {
 
     func testInvalidConfigReportsIssues() {
         let vm = Config.VM(
-            source: Config.VMSource(type: .local, image: nil, path: "/missing-vm"),
+            source: Config.VMSource(type: .local, image: nil, name: "  "),
             hardware: Config.Hardware(
                 ramGb: 0,
                 cpuCores: 0,
@@ -63,7 +63,7 @@ final class ConfigValidatorTests: XCTestCase {
         let config = Config(runners: [runner])
         let issues = ConfigValidator().validate(config)
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .warning, message: "runner runner-1: stopAfter is 0; sand will exit immediately.")))
-        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: Local VM path does not exist: /missing-vm.")))
+        XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.source.name is required for local sources.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.ramGb must be greater than 0.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.cpuCores must be greater than 0.")))
         XCTAssertTrue(issues.contains(ConfigValidationIssue(severity: .error, message: "runner runner-1: vm.hardware.display width/height must be greater than 0.")))
@@ -81,7 +81,7 @@ final class ConfigValidatorTests: XCTestCase {
 
     func testDuplicateRunnerNamesAreRejected() {
         let vm = Config.VM(
-            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
             hardware: nil,
             mounts: [],
             cache: nil,
@@ -102,7 +102,7 @@ final class ConfigValidatorTests: XCTestCase {
     func testRunnerCacheValidation() throws {
         let cacheFile = try writeTempFile(contents: "not-a-directory")
         let vm = Config.VM(
-            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", path: nil),
+            source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
             hardware: nil,
             mounts: [],
             cache: Config.Cache(hostPath: cacheFile.path, name: "bad/cache"),

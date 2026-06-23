@@ -5,7 +5,6 @@ runners:
       source:
         type: oci
         image: "ghcr.io/cirruslabs/ubuntu:latest"
-        path: null
       hardware:
         ramGb: null
         cpuCores: null
@@ -48,7 +47,6 @@ runners:
       source:
         type: oci
         image: "ghcr.io/cirruslabs/ubuntu:latest"
-        path: null
       cache:
         host: ~/.cache/sand/actions-runner
         name: sand-cache
