@@ -61,12 +61,13 @@ final class TartTests: XCTestCase {
             ],
             noAudio: true,
             noGraphics: false,
-            noClipboard: true
+            noClipboard: true,
+            nested: true
         )
         try await tart.run(name: "ephemeral", options: options)
         XCTAssertEqual(runner.calls.first, .init(
             executable: "tart",
-            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--dir", "dir:/tmp/dir:ro"],
+            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--nested", "--dir", "dir:/tmp/dir:ro"],
             wait: false
         ))
     }

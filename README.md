@@ -174,6 +174,22 @@ runners:
 
 If `healthCheck` is omitted, sand runs `echo healthcheck` every 30s after a 60s delay.
 
+### VM run options
+
+`vm.run` controls how each VM is booted via `tart run`:
+
+```
+runners:
+  - name: runner-1
+    vm:
+      run:
+        noGraphics: true    # default true; pass --no-graphics
+        noClipboard: false  # default false; pass --no-clipboard when true
+        nested: false       # default false; pass --nested for nested virtualization
+```
+
+Set `nested: true` to boot the VM with `tart run --nested`, enabling nested virtualization inside the guest. This requires an Apple Silicon host and guest that support it (see the [Tart docs](https://tart.run/)).
+
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml) or [fixtures/sample_on_prod.yml](fixtures/sample_on_prod.yml)
 
 ## Acknowledgements
