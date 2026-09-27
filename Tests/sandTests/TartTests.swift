@@ -48,8 +48,8 @@ final class TartTests: XCTestCase {
     func testRunArgs() async throws {
         let runner = MockProcessRunner()
         let tart = makeTart(runner)
-        try await tart.run(name: "ephemeral")
-        XCTAssertEqual(runner.calls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics"], wait: false))
+        try tart.run(name: "ephemeral")
+        XCTAssertEqual(runner.startCalls.first, .init(executable: "tart", arguments: ["run", "ephemeral", "--no-graphics"], wait: false))
     }
 
     func testRunArgsWithOptions() async throws {
@@ -64,8 +64,8 @@ final class TartTests: XCTestCase {
             noClipboard: true,
             nested: true
         )
-        try await tart.run(name: "ephemeral", options: options)
-        XCTAssertEqual(runner.calls.first, .init(
+        try tart.run(name: "ephemeral", options: options)
+        XCTAssertEqual(runner.startCalls.first, .init(
             executable: "tart",
             arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--nested", "--dir", "dir:/tmp/dir:ro"],
             wait: false

@@ -53,6 +53,19 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: marker))
     }
 
+    func testCancelledWaitCanLeaveProcessRunning() async throws {
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
+        defer { try? FileManager.default.removeItem(atPath: marker) }
+        let handle = try SystemProcessRunner().start(executable: "sh", arguments: ["-c", "sleep 0.5; touch '\(marker)'"])
+        let waiter = Task { try await handle.waitAsync(terminateOnCancel: false) }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        waiter.cancel()
+        _ = try? await waiter.value
+        let result = try await withTimeout(seconds: 10) { try await handle.waitAsync() }
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: marker))
+    }
+
     private func withTimeout<T: Sendable>(
         seconds: UInt64,
         _ operation: @escaping @Sendable () async throws -> T

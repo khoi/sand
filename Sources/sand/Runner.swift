@@ -19,6 +19,7 @@ struct Runner: Sendable {
         case missingGitHub
         case missingScript
         case invalidMountHostPath(String)
+        case vmExitedBeforeIP
     }
 
     private struct RunnerCacheInfo {
@@ -131,18 +132,22 @@ struct Runner: Sendable {
         )
         logRunOptions(name: name, options: runOptions)
         logger.info("boot VM \(name)")
+        let tartRun: ProcessHandle
         do {
-            try await tart.run(name: name, options: runOptions)
+            tartRun = try tart.run(name: name, options: runOptions)
         } catch {
             logger.error("tart run failed for \(name): \(String(describing: error))")
             await shutdownCoordinator.cleanup(reason: "tart run failed")
             throw error
         }
+        Task {
+            await logTartRunExit(tartRun, name: name)
+        }
         await logVMStatusAfterBoot(name: name)
         logger.info("wait for VM IP")
         let ip: String
         do {
-            ip = try await resolveIP(name: name)
+            ip = try await resolveIP(name: name, whileRunning: tartRun)
         } catch {
             logger.warning("resolve VM IP failed; scheduling restart: \(String(describing: error))")
             await scheduleRestart(reason: .ipNotReady)
@@ -503,6 +508,35 @@ struct Runner: Sendable {
         }
     }
 
+    private func resolveIP(name: String, whileRunning tartRun: ProcessHandle) async throws -> String {
+        try await withThrowingTaskGroup(of: String?.self) { group in
+            group.addTask {
+                try await resolveIP(name: name)
+            }
+            group.addTask {
+                _ = try? await tartRun.waitAsync(terminateOnCancel: false)
+                return nil
+            }
+            defer {
+                group.cancelAll()
+            }
+            guard let ip = try await group.next() ?? nil else {
+                throw RunnerError.vmExitedBeforeIP
+            }
+            return ip
+        }
+    }
+
+    private func logTartRunExit(_ tartRun: ProcessHandle, name: String) async {
+        do {
+            let result = try await tartRun.waitAsync(terminateOnCancel: false)
+            logIfNonEmpty(label: "tart run stderr", text: result.stderr)
+            logger.info("tart run for \(name) exited with code 0")
+        } catch {
+            logger.warning("tart run for \(name) exited: \(String(describing: error))")
+        }
+    }
+
     private func resolveIP(name: String) async throws -> String {
         var attempt = 0
         while true {
@@ -511,6 +545,7 @@ struct Runner: Sendable {
                 logger.info("resolve VM IP (attempt \(attempt))")
                 return try await tart.ip(name: name, wait: 180)
             } catch {
+                try Task.checkCancellation()
                 logger.warning("resolve VM IP failed (attempt \(attempt)): \(String(describing: error))")
                 do {
                     let status = try await tart.status(name: name)

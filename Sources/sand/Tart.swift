@@ -101,7 +101,8 @@ struct Tart: Sendable {
         _ = try await run(arguments: arguments, wait: true)
     }
 
-    func run(name: String, options: RunOptions = .default) async throws {
+    @discardableResult
+    func run(name: String, options: RunOptions = .default) throws -> ProcessHandle {
         var arguments = ["run", name]
         if options.noGraphics {
             arguments.append("--no-graphics")
@@ -119,7 +120,8 @@ struct Tart: Sendable {
             arguments.append("--dir")
             arguments.append(mount.runArgument)
         }
-        _ = try await run(arguments: arguments, wait: false)
+        logger.debug("tart \(arguments.joined(separator: " "))")
+        return try processRunner.start(executable: "tart", arguments: arguments)
     }
 
     func ip(name: String, wait: Int) async throws -> String {

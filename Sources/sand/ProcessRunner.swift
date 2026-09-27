@@ -91,7 +91,7 @@ actor ProcessHandle {
         self.terminateBlock = terminate
     }
 
-    func waitAsync() async throws -> ProcessResult {
+    func waitAsync(terminateOnCancel: Bool = true) async throws -> ProcessResult {
         if let waitAsyncBlock {
             return try await waitAsyncBlock()
         }
@@ -119,7 +119,7 @@ actor ProcessHandle {
                 }
             }
         }, onCancel: {
-            Task { await cancelWaiter(id: waiterID) }
+            Task { await cancelWaiter(id: waiterID, terminateProcess: terminateOnCancel) }
         })
     }
 
@@ -184,11 +184,11 @@ actor ProcessHandle {
         }
     }
 
-    private func cancelWaiter(id: UUID) {
+    private func cancelWaiter(id: UUID, terminateProcess: Bool) {
         if let continuation = waiters.removeValue(forKey: id) {
             continuation.resume(throwing: CancellationError())
         }
-        if cachedResult == nil, let process, process.isRunning {
+        if terminateProcess, cachedResult == nil, let process, process.isRunning {
             process.terminate()
         }
     }
