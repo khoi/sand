@@ -23,6 +23,16 @@ class Sand < Formula
     bin.install ".build/release/sand"
   end
 
+  service do
+    run [opt_bin/"sand", "run", "--config", "#{Dir.home}/sand.yml"]
+    keep_alive true
+    process_type :interactive
+    working_dir Dir.home
+    log_path "#{Dir.home}/Library/Logs/sand.log"
+    error_log_path "#{Dir.home}/Library/Logs/sand.log"
+    environment_variables PATH: std_service_path_env
+  end
+
   test do
     system bin/"sand", "--help"
   end
@@ -30,6 +40,9 @@ class Sand < Formula
   def caveats
     <<~EOS
       sand requires macOS 15+ and Tart available in your PATH.
+
+      To run sand at login with the config at ~/sand.yml:
+        brew services start sand
 
       macOS DHCP leases last 24 hours by default, causing IP exhaustion if you
       run more than ~253 VMs per day. To reduce lease time to 10 minutes:

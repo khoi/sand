@@ -43,51 +43,13 @@ These tests spin up real VMs and require `tart`, `ssh`, and `sshpass` on your ma
 
 ## Start up on boot
 
-To make sand run on boot, u can leverage launchctl as an option
-
-1) Create a LaunchAgent plist at `~/Library/LaunchAgents/io.khoi.sand.plist`:
+Create your config at `~/sand.yml`, then let Homebrew manage a LaunchAgent for it:
 
 ```
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>io.khoi.sand</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/sand</string>
-    <string>run</string>
-    <string>--config</string>
-    <string>/Users/yourname/sand.yml</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-  </dict>
-  <key>WorkingDirectory</key>
-  <string>/Users/yourname</string>
-  <key>KeepAlive</key>
-  <true/>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>/Users/yourname/Library/Logs/sand.launchd.out.log</string>
-  <key>StandardErrorPath</key>
-  <string>/Users/yourname/Library/Logs/sand.launchd.err.log</string>
-</dict>
-</plist>
+brew services start sand
 ```
 
-2) Load it (modern launchctl):
-
-```
-launchctl enable gui/$(id -u)/com.khoi.sand
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.khoi.sand.plist
-launchctl kickstart -k gui/$(id -u)/com.khoi.sand
-launchctl print gui/$(id -u)/com.khoi.sand
-```
+The service restarts sand if it exits, runs it as an interactive process so launchd doesn't throttle its CPU and I/O (or the VMs it starts), and writes output to `~/Library/Logs/sand.log`. Stop it with `brew services stop sand`.
 
 ## Logs
 
