@@ -91,6 +91,9 @@ final class ConfigValidator {
         if let diskSizeGb = vm.diskSizeGb, diskSizeGb <= 0 {
             issues.append(.init(severity: .error, message: "vm.diskSizeGb must be greater than 0."))
         }
+        if let rootDiskOpts = vm.run.rootDiskOpts, rootDiskOpts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(.init(severity: .error, message: "vm.run.rootDiskOpts must not be empty when set."))
+        }
 
         if vm.ssh.user.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append(.init(severity: .error, message: "vm.ssh.user must not be empty."))

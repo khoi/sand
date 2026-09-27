@@ -62,12 +62,13 @@ final class TartTests: XCTestCase {
             noAudio: true,
             noGraphics: false,
             noClipboard: true,
-            nested: true
+            nested: true,
+            rootDiskOpts: "caching=cached,sync=none"
         )
         try tart.run(name: "ephemeral", options: options)
         XCTAssertEqual(runner.startCalls.first, .init(
             executable: "tart",
-            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--nested", "--dir", "dir:/tmp/dir:ro"],
+            arguments: ["run", "ephemeral", "--no-audio", "--no-clipboard", "--nested", "--root-disk-opts=caching=cached,sync=none", "--dir", "dir:/tmp/dir:ro"],
             wait: false
         ))
     }
