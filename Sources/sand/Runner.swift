@@ -237,7 +237,7 @@ struct Runner: Sendable {
                     runnerVersion: runnerVersion,
                     cacheDirectory: runnerCacheInfo?.name
                 )
-                let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState)
+                let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState, secrets: [token])
                 switch outcome {
                 case .completed:
                     logger.warning("github provisioner completed; runner exited, restarting VM")
@@ -647,10 +647,11 @@ struct Runner: Sendable {
     private func runProvisionerCommands(
         _ commands: [String],
         ssh: SSHClient,
-        healthCheckState: HealthCheckState
+        healthCheckState: HealthCheckState,
+        secrets: [String] = []
     ) async -> ProvisionerSequenceOutcome {
         for command in commands {
-            let outcome = await runProvisionerCommand(command, ssh: ssh, healthCheckState: healthCheckState)
+            let outcome = await runProvisionerCommand(command, ssh: ssh, healthCheckState: healthCheckState, secrets: secrets)
             switch outcome {
             case .completed:
                 continue
@@ -666,13 +667,15 @@ struct Runner: Sendable {
     private func runProvisionerCommand(
         _ command: String,
         ssh: SSHClient,
-        healthCheckState: HealthCheckState
+        healthCheckState: HealthCheckState,
+        secrets: [String]
     ) async -> ProvisionerOutcome {
-        logScript(command)
+        let displayCommand = Runner.redact(command, secrets: secrets)
+        logScript(displayCommand)
         var attempt = 0
         while true {
             do {
-                let commandLabel = commandSummary(command)
+                let commandLabel = commandSummary(displayCommand)
                 let labeledCommand = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
                 logger.debug("\(labeledCommand) starting (attempt \(attempt + 1))")
                 let handle = try ssh.start(command: command)
@@ -750,6 +753,12 @@ struct Runner: Sendable {
             }
             return .failed(ProcessRunnerError.invalidCommand)
         }
+    }
+
+    static func redact(_ text: String, secrets: [String]) -> String {
+        secrets
+            .filter { !$0.isEmpty }
+            .reduce(text) { $0.replacingOccurrences(of: $1, with: "[REDACTED]") }
     }
 
     private func wrapHealthCheckCommand(_ command: String) -> String {

@@ -141,9 +141,23 @@ actor ProcessHandle {
     }
 }
 
-enum ProcessRunnerError: Error {
+enum ProcessRunnerError: Error, CustomStringConvertible {
     case failed(exitCode: Int32, stdout: String, stderr: String, command: [String])
     case invalidCommand
+
+    var description: String {
+        switch self {
+        case let .failed(exitCode, _, stderr, command):
+            let program = command.first ?? "process"
+            let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if detail.isEmpty {
+                return "\(program) exited with code \(exitCode)"
+            }
+            return "\(program) exited with code \(exitCode): \(detail)"
+        case .invalidCommand:
+            return "invalid command"
+        }
+    }
 }
 
 protocol ProcessRunning: Sendable {
