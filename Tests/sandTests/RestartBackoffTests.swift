@@ -37,4 +37,15 @@ final class RestartBackoffTests: XCTestCase {
         XCTAssertEqual(pending.0, 1)
         XCTAssertEqual(next.0, 0)
     }
+
+    func testProvisionerExitDoesNotBackOff() async {
+        let policy = RestartBackoffPolicy(baseDelay: 1, maxDelay: 60, multiplier: 2)
+        let backoff = RestartBackoff(policy: policy)
+        let first = await backoff.schedule(reason: .provisionerExited)
+        let second = await backoff.schedule(reason: .provisionerExited)
+        let third = await backoff.schedule(reason: .sshNotReady)
+        XCTAssertEqual(first, 0)
+        XCTAssertEqual(second, 0)
+        XCTAssertEqual(third, 1)
+    }
 }
