@@ -345,10 +345,6 @@ struct Config: Decodable, Sendable {
     }
 
     private func expandVM(_ vm: VM) -> VM {
-        // OCI images and local VM names are passed to tart as-is; only host
-        // filesystem paths (mounts, cache) need tilde expansion.
-        let vmSource = vm.source
-
         let mounts = vm.mounts.map { mount in
             DirectoryMount(
                 hostPath: Config.expandPath(mount.hostPath),
@@ -363,7 +359,7 @@ struct Config: Decodable, Sendable {
             )
         }
         return VM(
-            source: vmSource,
+            source: vm.source,
             hardware: vm.hardware,
             mounts: mounts,
             cache: cache,
