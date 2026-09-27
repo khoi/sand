@@ -29,8 +29,13 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
 struct GitHubProvisioner: Sendable {
     static let runnerCacheMountTag = "actions-runner-cache"
 
+    static func uniqueRunnerName(base: String) -> String {
+        "\(base)-\(String(format: "%05x", Int.random(in: 0..<0x100000)))"
+    }
+
     func script(
         config: GitHubProvisionerConfig,
+        runnerName: String,
         runnerToken: String,
         runnerVersion: String,
         cacheDirectory: String? = nil
@@ -49,7 +54,7 @@ echo $download_url
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
             "tar xzf ./actions-runner.tar.gz -C ~/actions-runner",
             "echo \"Runner downloaded and extracted\"",
-            "~/actions-runner/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)\(runnerGroupArgument)",
+            "~/actions-runner/config.sh --url \(url) --name \(runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)\(runnerGroupArgument)",
             "echo \"Runner script downloaded, starting ~/actions-runner/run.sh\"",
             "~/actions-runner/run.sh"
         ]

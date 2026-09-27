@@ -3,6 +3,7 @@ import Foundation
 actor VMShutdownCoordinator {
     private var activeName: String?
     private var cleanupTask: Task<Void, Never>?
+    private var deregistration: (@Sendable () async -> Void)?
     private let destroyer: VMDestroyer
     private let logger: Logger
 
@@ -14,7 +15,12 @@ actor VMShutdownCoordinator {
     func activate(name: String) {
         activeName = name
         cleanupTask = nil
+        deregistration = nil
         logger.info("shutdown coordinator activated for VM \(name)")
+    }
+
+    func setDeregistration(_ action: @escaping @Sendable () async -> Void) {
+        deregistration = action
     }
 
     func cleanup(reason: String? = nil) async {
@@ -29,8 +35,9 @@ actor VMShutdownCoordinator {
             return
         }
         logger.info("cleanup start for VM \(name) (reason: \(reasonLabel))")
-        let task = Task { [destroyer] in
+        let task = Task { [destroyer, deregistration] in
             _ = try? await destroyer.destroy(name: name)
+            await deregistration?()
         }
         cleanupTask = task
         await task.value

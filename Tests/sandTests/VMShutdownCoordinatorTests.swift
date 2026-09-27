@@ -84,4 +84,32 @@ final class VMShutdownCoordinatorTests: XCTestCase {
         let deleted = await gate.deleted
         XCTAssertFalse(deleted)
     }
+
+    func testCleanupDeregistersAfterDestroyingVM() async {
+        let gate = StopGate()
+        let logger = Logger(label: "shutdown.test", minimumLevel: .critical)
+        let coordinator = VMShutdownCoordinator(
+            destroyer: VMDestroyer(tart: makeTart(GatedStopRunner(gate: gate)), logger: logger),
+            logger: logger
+        )
+        let deletedAtDeregistration = DeregistrationProbe()
+        await coordinator.activate(name: "vm")
+        await coordinator.setDeregistration {
+            await deletedAtDeregistration.record(await gate.deleted)
+        }
+        let cleanup = Task { await coordinator.cleanup(reason: "runner") }
+        await gate.waitUntilStopStarted()
+        await gate.release()
+        await cleanup.value
+        let observed = await deletedAtDeregistration.values
+        XCTAssertEqual(observed, [true])
+    }
+}
+
+private actor DeregistrationProbe {
+    private(set) var values: [Bool] = []
+
+    func record(_ value: Bool) {
+        values.append(value)
+    }
 }

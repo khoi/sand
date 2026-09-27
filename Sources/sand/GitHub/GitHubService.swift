@@ -24,6 +24,15 @@ struct GitHubService: Sendable {
         let token: String
     }
 
+    struct RunnersResponse: Decodable {
+        struct Runner: Decodable {
+            let id: Int
+            let name: String
+        }
+
+        let runners: [Runner]
+    }
+
 
     let auth: GitHubAuthenticating
     let session: URLSessionProtocol
@@ -36,6 +45,19 @@ struct GitHubService: Sendable {
         let accessToken = try await installationAccessToken(installationId: installationId)
         let tokenResponse: RunnerTokenResponse = try await request(path: registrationTokenPath(), method: "POST", token: accessToken)
         return tokenResponse.token
+    }
+
+    func deleteRunner(named name: String) async throws -> Bool {
+        let installationId = try await installationID()
+        let accessToken = try await installationAccessToken(installationId: installationId)
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        let encodedName = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
+        let response: RunnersResponse = try await request(path: "\(runnersPath())?name=\(encodedName)", method: "GET", token: accessToken)
+        guard let runner = response.runners.first(where: { $0.name == name }) else {
+            return false
+        }
+        _ = try await send(path: "\(runnersPath())/\(runner.id)", method: "DELETE", token: accessToken)
+        return true
     }
 
 
@@ -52,6 +74,13 @@ struct GitHubService: Sendable {
     }
 
     private func request<T: Decodable>(path: String, method: String, token: String) async throws -> T {
+        let data = try await send(path: path, method: method, token: token)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func send(path: String, method: String, token: String) async throws -> Data {
         let url = URL(string: path, relativeTo: baseURL)!
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -66,9 +95,7 @@ struct GitHubService: Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw GitHubServiceError.httpError(status: httpResponse.statusCode, body: body)
         }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(T.self, from: data)
+        return data
     }
 
     private func installationPath() -> String {
@@ -83,6 +110,13 @@ struct GitHubService: Sendable {
             return "/repos/\(organization)/\(repository)/actions/runners/registration-token"
         }
         return "/orgs/\(organization)/actions/runners/registration-token"
+    }
+
+    private func runnersPath() -> String {
+        if let repository {
+            return "/repos/\(organization)/\(repository)/actions/runners"
+        }
+        return "/orgs/\(organization)/actions/runners"
     }
 
 }

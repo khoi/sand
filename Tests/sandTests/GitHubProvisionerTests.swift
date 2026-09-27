@@ -16,6 +16,7 @@ final class GitHubProvisionerTests: XCTestCase {
         let runnerVersion = "2.999.0"
         let script = provisioner.script(
             config: config,
+            runnerName: "runner-1-abcde",
             runnerToken: "token",
             runnerVersion: runnerVersion
         )
@@ -40,6 +41,7 @@ final class GitHubProvisionerTests: XCTestCase {
         let runnerVersion = "2.999.0"
         let script = provisioner.script(
             config: config,
+            runnerName: "runner-1-abcde",
             runnerToken: "token",
             runnerVersion: runnerVersion
         )
@@ -64,6 +66,7 @@ final class GitHubProvisionerTests: XCTestCase {
         let runnerVersion = "2.999.0"
         let script = provisioner.script(
             config: config,
+            runnerName: "runner-1-abcde",
             runnerToken: "token",
             runnerVersion: runnerVersion,
             cacheDirectory: "sand-cache"
@@ -91,6 +94,7 @@ final class GitHubProvisionerTests: XCTestCase {
         let runnerVersion = "2.999.0"
         let script = provisioner.script(
             config: config,
+            runnerName: "runner-1-abcde",
             runnerToken: "token",
             runnerVersion: runnerVersion,
             cacheDirectory: cacheDirectory
@@ -110,7 +114,7 @@ final class GitHubProvisionerTests: XCTestCase {
             extraLabels: nil,
             runnerGroup: "Mac Fleet's"
         )
-        let joined = GitHubProvisioner().script(config: config, runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
         XCTAssertTrue(joined.contains("--labels sand --runnergroup 'Mac Fleet'\\''s'"))
     }
 
@@ -123,7 +127,25 @@ final class GitHubProvisionerTests: XCTestCase {
             runnerName: "runner-1",
             extraLabels: nil
         )
-        let joined = GitHubProvisioner().script(config: config, runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
         XCTAssertFalse(joined.contains("--runnergroup"))
+    }
+
+    func testScriptRegistersUnderGivenRunnerName() {
+        let config = GitHubProvisionerConfig(
+            appId: 1,
+            organization: "org",
+            repository: nil,
+            privateKeyPath: "/tmp/key.pem",
+            runnerName: "runner-1",
+            extraLabels: nil
+        )
+        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1-0a1b2", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        XCTAssertTrue(joined.contains("--name runner-1-0a1b2 --token"))
+    }
+
+    func testUniqueRunnerNameAppendsHexSuffix() {
+        let name = GitHubProvisioner.uniqueRunnerName(base: "runner-1")
+        XCTAssertNotNil(name.wholeMatch(of: /runner-1-[0-9a-f]{5}/))
     }
 }

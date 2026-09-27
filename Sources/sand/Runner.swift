@@ -228,6 +228,17 @@ struct Runner: Sendable {
                 }
                 logger.info("run github provisioner")
                 let token = try await github.runnerRegistrationToken()
+                let runnerName = GitHubProvisioner.uniqueRunnerName(base: githubConfig.runnerName)
+                logger.info("register runner as \(runnerName)")
+                await shutdownCoordinator.setDeregistration { [github, logger] in
+                    do {
+                        if try await github.deleteRunner(named: runnerName) {
+                            logger.info("deregistered runner \(runnerName)")
+                        }
+                    } catch {
+                        logger.warning("failed to deregister runner \(runnerName): \(String(describing: error))")
+                    }
+                }
                 let runnerVersion = try await resolveRunnerVersion(cacheInfo: runnerCacheInfo)
                 if let runnerCacheInfo {
                     await preseedRunnerCacheIfPossible(
@@ -238,6 +249,7 @@ struct Runner: Sendable {
                 }
                 let commands = provisioner.script(
                     config: githubConfig,
+                    runnerName: runnerName,
                     runnerToken: token,
                     runnerVersion: runnerVersion,
                     cacheDirectory: runnerCacheInfo?.name

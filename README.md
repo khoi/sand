@@ -139,6 +139,8 @@ For `local` sources sand skips the registry pull and clones the named VM directl
 3) Download the private key and set `appId`, `organization`, `repository` (optional), and `privateKeyPath` in your config.
 4) Optionally set `runnerGroup` to register organization-level runners into a runner group (requires omitting `repository`).
 
+Each VM boot registers the runner as `<runnerName>-<5 hex chars>` so a VM killed mid-session never collides with the next boot's GitHub session. Sand deletes that registration from GitHub when it tears the VM down.
+
 ### GitHub Actions runner provisioner
 ```
 runners:
