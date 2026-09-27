@@ -19,8 +19,9 @@ sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.InternetS
 ## Install
 
 ```
-brew tap khoi/sand
 brew trust khoi/sand openai/tools
+brew tap khoi/sand
+brew tap openai/tools
 brew install sand
 ```
 

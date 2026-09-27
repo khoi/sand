@@ -27,6 +27,7 @@ jobs:
           sed -i '' "s|^  head .*|  head \"file://${GITHUB_WORKSPACE}\", using: :git, branch: \"ci-under-test\"|" Formula/sand.rb
       - run: brew tap-new local/sand
       - run: brew trust local/sand openai/tools $(brew tap | grep -v '^homebrew/')
+      - run: brew tap openai/tools
       - run: cp Formula/sand.rb "$(brew --repo local/sand)/Formula/sand.rb"
       - run: brew install --HEAD local/sand/sand
       - run: brew test local/sand/sand
