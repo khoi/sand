@@ -46,6 +46,9 @@ final class SSHClientTests: XCTestCase {
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
                 "-o", "LogLevel=ERROR",
+                "-o", "ConnectTimeout=10",
+                "-o", "ServerAliveInterval=30",
+                "-o", "ServerAliveCountMax=6",
                 "-p", "2222",
                 "admin@10.0.0.1",
                 "/bin/bash -lc 'echo hi'"
