@@ -26,7 +26,6 @@ runners:
         image: ${SAND_E2E_IMAGE}
       cache:
         host: ${cache_dir}
-        name: sand-cache
     provisioner:
       type: github
       config:

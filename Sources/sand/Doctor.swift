@@ -35,7 +35,7 @@ struct Doctor: AsyncParsableCommand {
 
     private func collectIssues(_ report: (String) -> Void) async -> [ConfigValidationIssue] {
         var issues: [ConfigValidationIssue] = []
-        let dependencies = ["tart", "sshpass", "ssh"]
+        let dependencies = ["tart", "sshpass", "ssh", "scp"]
         report("sand doctor checks:")
         report("- dependencies: \(dependencies.joined(separator: ", "))")
         let missing = DependencyChecker.missingCommands(dependencies)
@@ -45,13 +45,6 @@ struct Doctor: AsyncParsableCommand {
                 message: "Missing required dependencies in PATH: \(missing.joined(separator: ", "))."
             ))
         } else {
-            let optionalMissing = DependencyChecker.missingCommands(["scp"])
-            if !optionalMissing.isEmpty {
-                issues.append(.init(
-                    severity: .warning,
-                    message: "scp not found in PATH; runner cache preseed will be disabled."
-                ))
-            }
             report("- tart command health")
             issues.append(contentsOf: await checkTartHealth())
         }

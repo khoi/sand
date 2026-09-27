@@ -49,7 +49,6 @@ runners:
         image: "ghcr.io/cirruslabs/ubuntu:latest"
       cache:
         host: ~/.cache/sand/actions-runner
-        name: sand-cache
       ssh:
         user: admin
         password: admin

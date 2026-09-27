@@ -11,37 +11,32 @@ final class GitHubRunnerVersionResolverTests: XCTestCase {
         XCTAssertNil(GitHubRunnerVersionResolver.parseTagName(""))
     }
 
-    func testNewestCachedVersionSelectsHighest() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
+    func testParseReleaseCollectsAssetDigests() throws {
+        let digest = String(repeating: "ab", count: 32)
+        let json = """
+        {
+          "tag_name": "v2.331.0",
+          "assets": [
+            {"name": "actions-runner-osx-arm64-2.331.0.tar.gz", "digest": "sha256:\(digest.uppercased())"},
+            {"name": "actions-runner-linux-x64-2.331.0.tar.gz", "digest": null},
+            {"name": "actions-runner-linux-arm64-2.331.0.tar.gz", "digest": "md5:abc"}
+          ]
         }
-        let filenames = [
-            "actions-runner-osx-arm64-2.330.0.tar.gz",
-            "actions-runner-osx-arm64-2.331.0.tar.gz",
-            "actions-runner-linux-x64-2.329.1.tar.gz",
-            "notes.txt"
-        ]
-        for name in filenames {
-            let url = tempDir.appendingPathComponent(name)
-            FileManager.default.createFile(atPath: url.path, contents: Data())
-        }
-
-        let newest = GitHubRunnerVersionResolver.newestCachedVersion(in: tempDir.path)
-        XCTAssertEqual(newest, "2.331.0")
+        """
+        let release = try GitHubRunnerVersionResolver.parseRelease(Data(json.utf8))
+        XCTAssertEqual(release, RunnerRelease(version: "2.331.0", digests: ["actions-runner-osx-arm64-2.331.0.tar.gz": digest]))
     }
 
-    func testNewestCachedVersionReturnsNilForEmptyDirectory() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-        }
+    func testParseDigestRejectsMalformedValues() {
+        XCTAssertNil(GitHubRunnerVersionResolver.parseDigest("sha256:xyz"))
+        XCTAssertNil(GitHubRunnerVersionResolver.parseDigest("sha256:abcd"))
+        XCTAssertNil(GitHubRunnerVersionResolver.parseDigest(String(repeating: "a", count: 64)))
+    }
 
-        let newest = GitHubRunnerVersionResolver.newestCachedVersion(in: tempDir.path)
-        XCTAssertNil(newest)
+    func testIsNewerComparesNumerically() {
+        XCTAssertTrue(GitHubRunnerVersionResolver.isNewer("2.331.0", than: "2.330.9"))
+        XCTAssertTrue(GitHubRunnerVersionResolver.isNewer("2.331.10", than: "2.331.9"))
+        XCTAssertFalse(GitHubRunnerVersionResolver.isNewer("2.331.0", than: "2.331.0"))
+        XCTAssertFalse(GitHubRunnerVersionResolver.isNewer("2.330.0", than: "2.331"))
     }
 }

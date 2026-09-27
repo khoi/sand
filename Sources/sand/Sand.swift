@@ -24,7 +24,7 @@ struct Run: AsyncParsableCommand {
         let logSink = try logLevel.makeLogFileSink()
         let logger = Logger(label: "sand", minimumLevel: level, sink: logSink)
         logger.info("=== sand run start ===")
-        let requiredDependencies = dryRun ? ["tart"] : ["tart", "sshpass", "ssh"]
+        let requiredDependencies = dryRun ? ["tart"] : ["tart", "sshpass", "ssh", "scp"]
         let missing = DependencyChecker.missingCommands(requiredDependencies)
         if !missing.isEmpty {
             throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
@@ -61,6 +61,7 @@ struct Run: AsyncParsableCommand {
 
         let provisioner = GitHubProvisioner()
         let runnerVersionResolver = GitHubRunnerVersionResolver()
+        let runnerCache = RunnerCache()
         var runners: [Runner] = []
         var cleanupTargets: [VMShutdownCoordinator] = []
         var runnerControls: [RunnerControl] = []
@@ -81,6 +82,7 @@ struct Run: AsyncParsableCommand {
                 github: github,
                 provisioner: provisioner,
                 runnerVersionResolver: runnerVersionResolver,
+                runnerCache: runnerCache,
                 config: runnerConfig,
                 shutdownCoordinator: shutdownCoordinator,
                 control: runnerControl,

@@ -14,7 +14,6 @@ runners:
           mode: rw
       cache:
         host: ~/.cache/sand/actions-runner
-        name: sand-cache
     provisioner:
       type: github
       config:
@@ -43,7 +42,6 @@ runners:
           mode: rw
       cache:
         host: ~/.cache/sand/actions-runner
-        name: sand-cache
     provisioner:
       type: github
       config:

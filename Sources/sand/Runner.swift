@@ -5,6 +5,7 @@ struct Runner: Sendable {
     let github: GitHubService?
     let provisioner: GitHubProvisioner
     let runnerVersionResolver: GitHubRunnerVersionResolver
+    let runnerCache: RunnerCache
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
     let control: RunnerControl
@@ -20,11 +21,7 @@ struct Runner: Sendable {
         case missingScript
         case invalidMountHostPath(String)
         case vmExitedBeforeIP
-    }
-
-    private struct RunnerCacheInfo {
-        let hostPath: String
-        let name: String
+        case unsupportedRunnerPlatform(String)
     }
 
     init(
@@ -32,6 +29,7 @@ struct Runner: Sendable {
         github: GitHubService?,
         provisioner: GitHubProvisioner,
         runnerVersionResolver: GitHubRunnerVersionResolver,
+        runnerCache: RunnerCache,
         config: Config.RunnerConfig,
         shutdownCoordinator: VMShutdownCoordinator,
         control: RunnerControl,
@@ -44,6 +42,7 @@ struct Runner: Sendable {
         self.github = github
         self.provisioner = provisioner
         self.runnerVersionResolver = runnerVersionResolver
+        self.runnerCache = runnerCache
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
         self.control = control
@@ -118,11 +117,7 @@ struct Runner: Sendable {
             await shutdownCoordinator.cleanup(reason: "apply VM config failed")
             throw error
         }
-        let runnerCacheInfo = prepareRunnerCacheInfo(for: config)
-        if runnerCacheInfo == nil, config.provisioner.type == .github, config.vm.cache == nil {
-            logger.info("runner cache disabled: missing vm.cache")
-        }
-        let directoryMounts = try buildDirectoryMounts(vm: vm, cacheInfo: runnerCacheInfo, includeCache: config.provisioner.type == .github)
+        let directoryMounts = try buildDirectoryMounts(vm: vm)
         let runOptions = Tart.RunOptions(
             directoryMounts: directoryMounts,
             noAudio: vm.hardware?.audio == false,
@@ -239,20 +234,11 @@ struct Runner: Sendable {
                         logger.warning("failed to deregister runner \(runnerName): \(String(describing: error))")
                     }
                 }
-                let runnerVersion = try await resolveRunnerVersion(cacheInfo: runnerCacheInfo)
-                if let runnerCacheInfo {
-                    await preseedRunnerCacheIfPossible(
-                        cacheInfo: runnerCacheInfo,
-                        ssh: ssh,
-                        runnerVersion: runnerVersion
-                    )
-                }
+                try await installRunnerTarball(ssh: ssh)
                 let commands = provisioner.script(
                     config: githubConfig,
                     runnerName: runnerName,
-                    runnerToken: token,
-                    runnerVersion: runnerVersion,
-                    cacheDirectory: runnerCacheInfo?.name
+                    runnerToken: token
                 )
                 let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState, secrets: [token])
                 switch outcome {
@@ -343,113 +329,37 @@ struct Runner: Sendable {
         )
     }
 
-    private func prepareRunnerCacheInfo(for config: Config.RunnerConfig) -> RunnerCacheInfo? {
-        guard config.provisioner.type == .github else {
-            return nil
-        }
-        guard let cache = config.vm.cache else {
-            return nil
-        }
-        let name = Config.resolveMountName(hostPath: cache.hostPath, name: cache.name).trimmingCharacters(in: .whitespacesAndNewlines)
-        let hostPath = cache.hostPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty || hostPath.isEmpty {
-            return nil
-        }
+    private func installRunnerTarball(ssh: SSHClient) async throws {
+        let platform = try await resolveRunnerPlatform(ssh: ssh)
+        let directory = config.vm.cache?.hostPath ?? Config.expandPath(Config.Cache.defaultHostPath)
+        try ensureDirectoryExists(directory)
+        let tarball: String
         do {
-            try ensureDirectoryExists(hostPath)
+            let release = try await runnerVersionResolver.latestRelease()
+            let asset = RunnerAsset(platform: platform, version: release.version)
+            guard let digest = release.digests[asset.name] else {
+                throw RunnerCacheError.missingDigest(asset.name)
+            }
+            tarball = try await runnerCache.verifiedTarball(directory: directory, asset: asset, digest: digest)
+            logger.info("runner \(release.version) verified at \(tarball)")
         } catch {
-            logger.warning("runner cache host could not be prepared at \(hostPath): \(String(describing: error))")
-            return nil
-        }
-        logger.info("runner cache enabled: \(hostPath) -> \(name)")
-        return RunnerCacheInfo(hostPath: hostPath, name: name)
-    }
-
-    private func resolveRunnerVersion(cacheInfo: RunnerCacheInfo?) async throws -> String {
-        do {
-            let version = try await runnerVersionResolver.latestVersion()
-            logger.info("resolved latest Actions runner version via GitHub API: \(version)")
-            return version
-        } catch {
-            guard let cacheInfo,
-                  let cachedVersion = GitHubRunnerVersionResolver.newestCachedVersion(in: cacheInfo.hostPath) else {
-                logger.error("failed to resolve latest Actions runner version: \(String(describing: error))")
+            guard let cached = RunnerCache.newestVerifiedTarball(directory: directory, platform: platform) else {
+                logger.error("failed to obtain a verified Actions runner: \(String(describing: error))")
                 throw error
             }
-            logger.warning("failed to resolve latest Actions runner version; using cached version \(cachedVersion) from \(cacheInfo.hostPath): \(String(describing: error))")
-            return cachedVersion
+            logger.warning("failed to obtain the latest Actions runner; using verified cached \(cached.version): \(String(describing: error))")
+            tarball = cached.path
         }
+        _ = try await ssh.copy(localPath: tarball, remotePath: GitHubProvisioner.tarballRemotePath)
     }
 
-    private func preseedRunnerCacheIfPossible(
-        cacheInfo: RunnerCacheInfo,
-        ssh: SSHClient,
-        runnerVersion: String
-    ) async {
-        let missing = DependencyChecker.missingCommands(["scp"])
-        if !missing.isEmpty {
-            logger.warning("runner cache preseed skipped: missing scp in PATH")
-            return
+    private func resolveRunnerPlatform(ssh: SSHClient) async throws -> String {
+        let output = try await execWithRetry(command: "uname -s; uname -m", ssh: ssh, stage: "runner platform")?.stdout ?? ""
+        let lines = output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard lines.count >= 2, let platform = RunnerAsset.platform(os: lines[0], arch: lines[1]) else {
+            throw RunnerError.unsupportedRunnerPlatform(output)
         }
-        let assetName = await resolveRunnerAssetName(ssh: ssh, runnerVersion: runnerVersion)
-        guard let assetName else {
-            logger.warning("runner cache preseed skipped: unable to resolve runner asset name")
-            return
-        }
-        logger.debug("runner cache asset resolved: \(assetName) (version \(runnerVersion))")
-        let hostFile = (cacheInfo.hostPath as NSString).appendingPathComponent(assetName)
-        guard FileManager.default.fileExists(atPath: hostFile) else {
-            logger.info("runner cache preseed skipped: host cache file not found at \(hostFile)")
-            return
-        }
-        let remotePath = await resolveRemoteHome(ssh: ssh)
-            .map { "\($0)/actions-runner.tar.gz" } ?? "actions-runner.tar.gz"
-        if let _ = try? await ssh.exec(command: "test -f \(remotePath)") {
-            logger.info("runner cache preseed skipped: \(remotePath) already present")
-            return
-        }
-        logger.info("runner cache preseed: \(hostFile) -> \(remotePath)")
-        do {
-            _ = try await ssh.copy(localPath: hostFile, remotePath: remotePath)
-        } catch {
-            logger.warning("runner cache preseed failed: \(String(describing: error))")
-        }
-    }
-
-    private func resolveRunnerAssetName(ssh: SSHClient, runnerVersion: String) async -> String? {
-        do {
-            guard let result = try await ssh.exec(command: "uname -s; uname -m") else {
-                return nil
-            }
-            let lines = result.stdout
-                .split(whereSeparator: \.isNewline)
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            guard lines.count >= 2 else {
-                return nil
-            }
-            return GitHubProvisioner.runnerAssetName(
-                os: lines[0],
-                arch: lines[1],
-                version: runnerVersion
-            )
-        } catch {
-            logger.warning("runner cache preseed failed to read OS/arch: \(String(describing: error))")
-            return nil
-        }
-    }
-
-    private func resolveRemoteHome(ssh: SSHClient) async -> String? {
-        do {
-            guard let result = try await ssh.exec(command: "printf %s \"$HOME\"") else {
-                return nil
-            }
-            let home = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            return home.isEmpty ? nil : home
-        } catch {
-            logger.warning("runner cache preseed failed to read remote home: \(String(describing: error))")
-            return nil
-        }
+        return platform
     }
 
     private func waitForSSH(ssh: SSHClient) async -> Bool {
@@ -735,7 +645,6 @@ struct Runner: Sendable {
                     let stderrLabel = commandLabel.isEmpty ? "stderr" : "stderr (\(commandLabel))"
                     logIfNonEmpty(label: stdoutLabel, text: result.stdout)
                     logIfNonEmpty(label: stderrLabel, text: result.stderr)
-                    logCacheStatusIfPresent(output: result.stdout)
                     let completionLabel = commandLabel.isEmpty ? "provisioner command" : "provisioner command (\(commandLabel))"
                     logger.info("\(completionLabel) completed with exit code \(result.exitCode)")
                     if isRunnerCommand(command) {
@@ -954,27 +863,6 @@ struct Runner: Sendable {
         return compact
     }
 
-    private func logCacheStatusIfPresent(output: String) {
-        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-        let prefixes = [
-            "runner cache hit:",
-            "runner cache miss:",
-            "runner cache populated:",
-            "runner cache unavailable:"
-        ]
-        for line in output.split(whereSeparator: \.isNewline) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                continue
-            }
-            if prefixes.contains(where: { trimmed.hasPrefix($0) }) {
-                logger.info(trimmed)
-            }
-        }
-    }
-
     private func isRunnerCommand(_ command: String) -> Bool {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -1065,20 +953,13 @@ struct Runner: Sendable {
         }
     }
 
-    private func buildDirectoryMounts(
-        vm: Config.VM,
-        cacheInfo: RunnerCacheInfo?,
-        includeCache: Bool
-    ) throws -> [Tart.DirectoryMount] {
+    private func buildDirectoryMounts(vm: Config.VM) throws -> [Tart.DirectoryMount] {
         var mounts: [Tart.DirectoryMount] = []
         for mount in vm.mounts {
             let hostPath = mount.hostPath
             try ensureDirectoryExists(hostPath)
             let name = Config.resolveMountName(hostPath: hostPath, name: mount.name)
             mounts.append(Tart.DirectoryMount(hostPath: hostPath, name: name, readOnly: mount.mode == .ro))
-        }
-        if includeCache, let cacheInfo {
-            mounts.append(Tart.DirectoryMount(hostPath: cacheInfo.hostPath, name: cacheInfo.name, readOnly: false))
         }
         return mounts
     }

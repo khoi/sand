@@ -151,7 +151,6 @@ runners:
         image: ghcr.io/cirruslabs/macos-runner:tahoe
       cache:
         host: ~/.cache/sand/actions-runner
-        name: sand-cache
     provisioner:
       type: github
       config:
@@ -166,14 +165,14 @@ runners:
       delay: 60
 ```
 
-To enable runner caching, set `vm.cache`. The GitHub provisioner reuses the Actions runner archive from that mount between restarts; on a cache miss it downloads the tarball and stores it in the mounted directory. On macOS guests, the cache directory resolves to `/Volumes/My Shared Files/<name>` (with `name` acting as the share name).
+Sand downloads the Actions runner on the host, checks it against the SHA-256 digest GitHub publishes for the release, and copies the verified tarball into each VM over `scp`. The guest never downloads the runner and never gets write access to the cache, so a job cannot tamper with the runner used by later VMs.
 
-Sand resolves the latest Actions runner version at runtime via the GitHub API and uses that version for both the download URL and the cache filename. If version resolution fails and a cache directory is available, sand falls back to the newest cached runner tarball it can find.
+Verified tarballs are kept in `vm.cache.host` (default `~/.cache/sand/actions-runner`), with a `.sha256` file next to each and the three newest versions retained per platform. Sand checks for a new runner release once a day; if GitHub is unreachable it falls back to the newest verified tarball in the cache.
 
 Common pitfalls:
 - `vm.cache.host` must be a directory (missing paths are created; file paths are rejected).
 - `vm.cache` is ignored unless the provisioner type is `github`.
-- Linux runner cache requires virtiofs support in the guest. The default Ubuntu images from cirruslabs do not provide virtiofs, so cache mounts on Ubuntu are not supported.
+- `scp` must be available on the host.
 
 ### Custom provisioner script
 

@@ -175,12 +175,6 @@ final class ConfigValidator {
 
     private func validateRunnerCache(_ runner: Config.RunnerConfig, issues: inout [ConfigValidationIssue]) {
         guard let cache = runner.vm.cache else {
-            if runner.provisioner.type == .github {
-                issues.append(.init(
-                    severity: .warning,
-                    message: "github provisioner configured without vm.cache; runner cache is disabled."
-                ))
-            }
             return
         }
         if runner.provisioner.type != .github {
@@ -201,8 +195,12 @@ final class ConfigValidator {
                 ))
             }
         }
-        let resolvedName = Config.resolveMountName(hostPath: cache.hostPath, name: cache.name)
-        validateMountName(resolvedName, label: "vm.cache.name", issues: &issues)
+        if cache.name != nil {
+            issues.append(.init(
+                severity: .warning,
+                message: "vm.cache.name is ignored; the runner cache stays on the host and is copied into each VM."
+            ))
+        }
     }
 
     private func validateMountName(_ name: String, label: String, issues: inout [ConfigValidationIssue]) {

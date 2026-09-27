@@ -7,36 +7,47 @@ enum GitHubRunnerVersionResolverError: Error {
     case invalidTag(String)
 }
 
+struct RunnerRelease: Sendable, Equatable {
+    let version: String
+    let digests: [String: String]
+}
+
 actor GitHubRunnerVersionResolver: Sendable {
+    static let refreshInterval: TimeInterval = 86_400
+
     private let session: URLSession
-    private var cachedVersion: String?
-    private var inFlight: Task<String, Error>?
+    private var cached: (release: RunnerRelease, fetchedAt: Date)?
+    private var inFlight: Task<RunnerRelease, Error>?
 
     init(session: URLSession = .shared) {
         self.session = session
     }
 
-    func latestVersion() async throws -> String {
-        if let cachedVersion {
-            return cachedVersion
+    func latestRelease() async throws -> RunnerRelease {
+        if let cached, Date().timeIntervalSince(cached.fetchedAt) < Self.refreshInterval {
+            return cached.release
         }
         if let inFlight {
             return try await inFlight.value
         }
-        let task = Task { try await fetchLatestVersion() }
+        let task = Task { try await fetchLatestRelease() }
         inFlight = task
+        defer {
+            inFlight = nil
+        }
         do {
-            let version = try await task.value
-            cachedVersion = version
-            inFlight = nil
-            return version
+            let release = try await task.value
+            cached = (release, Date())
+            return release
         } catch {
-            inFlight = nil
+            if let cached {
+                return cached.release
+            }
             throw error
         }
     }
 
-    private func fetchLatestVersion() async throws -> String {
+    private func fetchLatestRelease() async throws -> RunnerRelease {
         guard let url = URL(string: "https://api.github.com/repos/actions/runner/releases/latest") else {
             throw GitHubRunnerVersionResolverError.invalidResponse
         }
@@ -50,14 +61,36 @@ actor GitHubRunnerVersionResolver: Sendable {
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw GitHubRunnerVersionResolverError.httpStatus(httpResponse.statusCode)
         }
+        return try Self.parseRelease(data)
+    }
+
+    static func parseRelease(_ data: Data) throws -> RunnerRelease {
         let payload = try JSONDecoder().decode(LatestRelease.self, from: data)
         guard let tag = payload.tag_name else {
             throw GitHubRunnerVersionResolverError.missingTag
         }
-        guard let version = Self.parseTagName(tag) else {
+        guard let version = parseTagName(tag) else {
             throw GitHubRunnerVersionResolverError.invalidTag(tag)
         }
-        return version
+        var digests: [String: String] = [:]
+        for asset in payload.assets ?? [] {
+            if let digest = asset.digest.flatMap(parseDigest) {
+                digests[asset.name] = digest
+            }
+        }
+        return RunnerRelease(version: version, digests: digests)
+    }
+
+    static func parseDigest(_ digest: String) -> String? {
+        let prefix = "sha256:"
+        guard digest.hasPrefix(prefix) else {
+            return nil
+        }
+        let hex = digest.dropFirst(prefix.count).lowercased()
+        guard hex.count == 64, hex.allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        return hex
     }
 
     static func parseTagName(_ tagName: String) -> String? {
@@ -77,73 +110,26 @@ actor GitHubRunnerVersionResolver: Sendable {
         return version
     }
 
-    static func newestCachedVersion(in directory: String) -> String? {
-        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: directory) else {
-            return nil
-        }
-        var newestVersion: String?
-        var newestComponents: [Int]?
-        for entry in entries {
-            guard let version = extractVersion(from: entry),
-                  let components = parseVersionComponents(version) else {
-                continue
-            }
-            if let currentComponents = newestComponents {
-                if compareVersions(components, currentComponents) == .orderedDescending {
-                    newestVersion = version
-                    newestComponents = components
-                }
-            } else {
-                newestVersion = version
-                newestComponents = components
+    static func isNewer(_ lhs: String, than rhs: String) -> Bool {
+        let left = lhs.split(separator: ".").map { Int($0) ?? 0 }
+        let right = rhs.split(separator: ".").map { Int($0) ?? 0 }
+        for index in 0..<max(left.count, right.count) {
+            let l = index < left.count ? left[index] : 0
+            let r = index < right.count ? right[index] : 0
+            if l != r {
+                return l > r
             }
         }
-        return newestVersion
-    }
-
-    private static func extractVersion(from filename: String) -> String? {
-        let prefix = "actions-runner-"
-        let suffix = ".tar.gz"
-        guard filename.hasPrefix(prefix), filename.hasSuffix(suffix) else {
-            return nil
-        }
-        let core = String(filename.dropFirst(prefix.count).dropLast(suffix.count))
-        guard let dashIndex = core.lastIndex(of: "-") else {
-            return nil
-        }
-        let version = String(core[core.index(after: dashIndex)...])
-        return parseTagName(version)
-    }
-
-    private static func parseVersionComponents(_ version: String) -> [Int]? {
-        let parts = version.split(separator: ".")
-        guard !parts.isEmpty else {
-            return nil
-        }
-        var components: [Int] = []
-        for part in parts {
-            guard let value = Int(part) else {
-                return nil
-            }
-            components.append(value)
-        }
-        return components
-    }
-
-    private static func compareVersions(_ lhs: [Int], _ rhs: [Int]) -> ComparisonResult {
-        let count = max(lhs.count, rhs.count)
-        for index in 0..<count {
-            let left = index < lhs.count ? lhs[index] : 0
-            let right = index < rhs.count ? rhs[index] : 0
-            if left == right {
-                continue
-            }
-            return left < right ? .orderedAscending : .orderedDescending
-        }
-        return .orderedSame
+        return false
     }
 
     private struct LatestRelease: Decodable {
+        struct Asset: Decodable {
+            let name: String
+            let digest: String?
+        }
+
         let tag_name: String?
+        let assets: [Asset]?
     }
 }

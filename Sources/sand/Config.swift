@@ -153,6 +153,8 @@ struct Config: Decodable, Sendable {
     }
 
     struct Cache: Decodable, Sendable {
+        static let defaultHostPath = "~/.cache/sand/actions-runner"
+
         let hostPath: String
         let name: String?
 

@@ -3,145 +3,53 @@ import XCTest
 @testable import sand
 
 final class GitHubProvisionerTests: XCTestCase {
+    private func config(
+        repository: String? = nil,
+        extraLabels: [String]? = nil,
+        runnerGroup: String? = nil
+    ) -> GitHubProvisionerConfig {
+        GitHubProvisionerConfig(
+            appId: 1,
+            organization: "org",
+            repository: repository,
+            privateKeyPath: "/tmp/key.pem",
+            runnerName: "runner-1",
+            extraLabels: extraLabels,
+            runnerGroup: runnerGroup
+        )
+    }
+
+    func testScriptExtractsCopiedTarballAndRegisters() {
+        let script = GitHubProvisioner().script(config: config(repository: "repo"), runnerName: "runner-1-0a1b2", runnerToken: "token")
+        XCTAssertEqual(script, [
+            "rm -rf ~/actions-runner && mkdir ~/actions-runner",
+            "tar xzf ~/actions-runner.tar.gz -C ~/actions-runner",
+            "echo \"Runner extracted\"",
+            "~/actions-runner/config.sh --url https://github.com/org/repo --name runner-1-0a1b2 --token token --ephemeral --unattended --replace --labels sand",
+            "echo \"Runner configured, starting ~/actions-runner/run.sh\"",
+            "~/actions-runner/run.sh"
+        ])
+    }
+
+    func testScriptNeverDownloadsInGuest() {
+        let joined = GitHubProvisioner().script(config: config(), runnerName: "runner-1", runnerToken: "token").joined(separator: "\n")
+        XCTAssertFalse(joined.contains("curl"))
+        XCTAssertTrue(joined.contains("--url https://github.com/org --name"))
+    }
+
     func testScriptWithExtraLabels() {
-        let provisioner = GitHubProvisioner()
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: "repo",
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: ["fast", "arm64"]
-        )
-        let runnerVersion = "2.999.0"
-        let script = provisioner.script(
-            config: config,
-            runnerName: "runner-1-abcde",
-            runnerToken: "token",
-            runnerVersion: runnerVersion
-        )
-        let joined = script.joined(separator: "\n")
+        let joined = GitHubProvisioner().script(config: config(extraLabels: ["fast", "arm64"]), runnerName: "runner-1", runnerToken: "token").joined(separator: "\n")
         XCTAssertTrue(joined.contains("--labels sand,fast,arm64"))
-        XCTAssertTrue(joined.contains("--url https://github.com/org/repo"))
-        XCTAssertTrue(joined.contains("actions/runner/releases/download"))
-        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
-        XCTAssertFalse(joined.contains("runner cache"))
-    }
-
-    func testScriptWithDefaultLabels() {
-        let provisioner = GitHubProvisioner()
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: nil,
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil
-        )
-        let runnerVersion = "2.999.0"
-        let script = provisioner.script(
-            config: config,
-            runnerName: "runner-1-abcde",
-            runnerToken: "token",
-            runnerVersion: runnerVersion
-        )
-        let joined = script.joined(separator: "\n")
-        XCTAssertTrue(joined.contains("--labels sand"))
-        XCTAssertTrue(joined.contains("--url https://github.com/org"))
-        XCTAssertTrue(joined.contains("actions-runner-${runner_os}-${runner_arch}"))
-        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
-        XCTAssertFalse(joined.contains("runner cache"))
-    }
-
-    func testScriptIncludesRunnerCacheLogic() {
-        let provisioner = GitHubProvisioner()
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: "repo",
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil
-        )
-        let runnerVersion = "2.999.0"
-        let script = provisioner.script(
-            config: config,
-            runnerName: "runner-1-abcde",
-            runnerToken: "token",
-            runnerVersion: runnerVersion,
-            cacheDirectory: "sand-cache"
-        )
-        let joined = script.joined(separator: "\n")
-        XCTAssertTrue(joined.contains("runner cache hit"))
-        XCTAssertTrue(joined.contains("runner cache miss"))
-        XCTAssertTrue(joined.contains("runner cache unavailable"))
-        XCTAssertTrue(joined.contains("cache_dir="))
-        XCTAssertTrue(joined.contains("cache_file="))
-        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
-    }
-
-    func testScriptUsesRunnerCacheDirectoryValue() {
-        let provisioner = GitHubProvisioner()
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: "repo",
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil
-        )
-        let cacheDirectory = "/var/tmp/runner-cache"
-        let runnerVersion = "2.999.0"
-        let script = provisioner.script(
-            config: config,
-            runnerName: "runner-1-abcde",
-            runnerToken: "token",
-            runnerVersion: runnerVersion,
-            cacheDirectory: cacheDirectory
-        )
-        let joined = script.joined(separator: "\n")
-        XCTAssertTrue(joined.contains("cache_dir_name=\"\(cacheDirectory)\""))
-        XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
     }
 
     func testScriptRegistersIntoQuotedRunnerGroup() {
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: nil,
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil,
-            runnerGroup: "Mac Fleet's"
-        )
-        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        let joined = GitHubProvisioner().script(config: config(runnerGroup: "Mac Fleet's"), runnerName: "runner-1", runnerToken: "token").joined(separator: "\n")
         XCTAssertTrue(joined.contains("--labels sand --runnergroup 'Mac Fleet'\\''s'"))
     }
 
     func testScriptOmitsRunnerGroupByDefault() {
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: nil,
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil
-        )
-        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        let joined = GitHubProvisioner().script(config: config(), runnerName: "runner-1", runnerToken: "token").joined(separator: "\n")
         XCTAssertFalse(joined.contains("--runnergroup"))
-    }
-
-    func testScriptRegistersUnderGivenRunnerName() {
-        let config = GitHubProvisionerConfig(
-            appId: 1,
-            organization: "org",
-            repository: nil,
-            privateKeyPath: "/tmp/key.pem",
-            runnerName: "runner-1",
-            extraLabels: nil
-        )
-        let joined = GitHubProvisioner().script(config: config, runnerName: "runner-1-0a1b2", runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
-        XCTAssertTrue(joined.contains("--name runner-1-0a1b2 --token"))
     }
 
     func testUniqueRunnerNameAppendsHexSuffix() {

@@ -29,7 +29,6 @@ runners:
           mode: ro
       cache:
         host: /tmp/runner-cache
-        name: sand-cache
     provisioner:
       type: script
       config:
