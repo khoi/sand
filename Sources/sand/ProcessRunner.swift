@@ -1,5 +1,58 @@
 import Foundation
 
+private final class PipeDrain: @unchecked Sendable {
+    private let handle: FileHandle
+    private let lock = NSLock()
+    private var data = Data()
+    private var finished = false
+
+    init(pipe: Pipe) {
+        handle = pipe.fileHandleForReading
+        handle.readabilityHandler = { [self] handle in
+            lock.withLock {
+                guard !finished else {
+                    handle.readabilityHandler = nil
+                    return
+                }
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                } else {
+                    data.append(chunk)
+                }
+            }
+        }
+    }
+
+    func finish() -> Data {
+        handle.readabilityHandler = nil
+        return lock.withLock {
+            if !finished {
+                finished = true
+                drainRemaining()
+                try? handle.close()
+            }
+            return data
+        }
+    }
+
+    private func drainRemaining() {
+        let descriptor = handle.fileDescriptor
+        let flags = fcntl(descriptor, F_GETFL)
+        guard flags >= 0, fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) >= 0 else {
+            return
+        }
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
+            guard count > 0 else {
+                return
+            }
+            data.append(contentsOf: buffer[0..<count])
+        }
+    }
+}
+
 struct ProcessResult: Sendable {
     let stdout: String
     let stderr: String
@@ -8,8 +61,8 @@ struct ProcessResult: Sendable {
 
 actor ProcessHandle {
     private let process: Process?
-    private let stdoutPipe: Pipe?
-    private let stderrPipe: Pipe?
+    private let stdoutDrain: PipeDrain?
+    private let stderrDrain: PipeDrain?
     private let command: [String]?
     private let waitAsyncBlock: (() async throws -> ProcessResult)?
     private let terminateBlock: (() -> Void)?
@@ -19,8 +72,8 @@ actor ProcessHandle {
 
     init(process: Process, stdoutPipe: Pipe, stderrPipe: Pipe, command: [String]) {
         self.process = process
-        self.stdoutPipe = stdoutPipe
-        self.stderrPipe = stderrPipe
+        self.stdoutDrain = PipeDrain(pipe: stdoutPipe)
+        self.stderrDrain = PipeDrain(pipe: stderrPipe)
         self.command = command
         self.waitAsyncBlock = nil
         self.terminateBlock = nil
@@ -31,8 +84,8 @@ actor ProcessHandle {
         terminate: @escaping () -> Void
     ) {
         self.process = nil
-        self.stdoutPipe = nil
-        self.stderrPipe = nil
+        self.stdoutDrain = nil
+        self.stderrDrain = nil
         self.command = nil
         self.waitAsyncBlock = waitAsync
         self.terminateBlock = terminate
@@ -85,13 +138,13 @@ actor ProcessHandle {
         if let cachedResult {
             return cachedResult
         }
-        guard let process, let stdoutPipe, let stderrPipe, let command else {
+        guard let process, let stdoutDrain, let stderrDrain, let command else {
             let failure = Result<ProcessResult, Error>.failure(ProcessRunnerError.invalidCommand)
             cachedResult = failure
             return failure
         }
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdoutData = stdoutDrain.finish()
+        let stderrData = stderrDrain.finish()
         let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
         let stderr = String(data: stderrData, encoding: .utf8) ?? ""
         let exitCode = process.terminationStatus
