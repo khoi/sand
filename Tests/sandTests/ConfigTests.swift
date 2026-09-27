@@ -167,4 +167,41 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.runners.last?.vm.source.resolvedSource, "vm-b")
         XCTAssertEqual(config.runners.first?.healthCheck?.command, "true")
     }
+
+    func testRunnerGroupDecodes() throws {
+        let yaml = """
+        runners:
+          - name: runner-1
+            vm:
+              source:
+                type: oci
+                image: ghcr.io/acme/vm:latest
+              ssh:
+                user: admin
+                password: admin
+            provisioner:
+              type: github
+              config:
+                appId: 42
+                organization: acme
+                privateKeyPath: ~/key.pem
+                runnerName: runner-1
+                runnerGroup: mac-fleet
+        """
+        let config = try Config.load(path: writeTempFile(contents: yaml).path)
+        XCTAssertEqual(config.runners.first?.provisioner.github?.runnerGroup, "mac-fleet")
+    }
+
+    func testFixturesLoad() throws {
+        let fixtures = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("fixtures")
+        let files = try FileManager.default.contentsOfDirectory(atPath: fixtures.path).filter { $0.hasSuffix(".yml") }
+        XCTAssertFalse(files.isEmpty)
+        for file in files {
+            XCTAssertNoThrow(try Config.load(path: fixtures.appendingPathComponent(file).path), file)
+        }
+    }
 }

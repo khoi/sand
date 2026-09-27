@@ -137,6 +137,7 @@ For `local` sources sand skips the registry pull and clones the named VM directl
 1) Create a GitHub App and grant `Self-hosted runners` permission set to `Read & Write` at the organization level. https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
 2) Install the app on the organization or the specific repository you want to run against.
 3) Download the private key and set `appId`, `organization`, `repository` (optional), and `privateKeyPath` in your config.
+4) Optionally set `runnerGroup` to register organization-level runners into a runner group (requires omitting `repository`).
 
 ### GitHub Actions runner provisioner
 ```

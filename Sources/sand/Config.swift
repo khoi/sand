@@ -405,7 +405,8 @@ extension Config.Provisioner {
                 repository: github.repository,
                 privateKeyPath: Config.expandPath(github.privateKeyPath),
                 runnerName: github.runnerName,
-                extraLabels: github.extraLabels
+                extraLabels: github.extraLabels,
+                runnerGroup: github.runnerGroup
             )
             return Config.Provisioner(type: type, script: nil, github: expanded)
         }

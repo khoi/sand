@@ -133,4 +133,46 @@ final class ConfigValidatorTests: XCTestCase {
             message: "runner runner-1: vm.cache.host must be a directory: \(cacheFile.path)."
         )))
     }
+
+    func testRunnerGroupValidation() throws {
+        let keyURL = try writeTempFile(contents: "key", suffix: ".pem")
+        func issues(repository: String?, runnerGroup: String?) -> [ConfigValidationIssue] {
+            let github = GitHubProvisionerConfig(
+                appId: 1,
+                organization: "acme",
+                repository: repository,
+                privateKeyPath: keyURL.path,
+                runnerName: "runner-1",
+                extraLabels: nil,
+                runnerGroup: runnerGroup
+            )
+            let runner = Config.RunnerConfig(
+                name: "runner-1",
+                vm: Config.VM(
+                    source: Config.VMSource(type: .oci, image: "ghcr.io/acme/vm:latest", name: nil),
+                    hardware: nil,
+                    mounts: [],
+                    cache: Config.Cache(hostPath: "/tmp/sand-cache", name: "sand-cache"),
+                    run: .default,
+                    diskSizeGb: nil,
+                    ssh: .standard
+                ),
+                provisioner: Config.Provisioner(type: .github, script: nil, github: github),
+                preRun: nil,
+                postRun: nil,
+                stopAfter: 1,
+                healthCheck: Config.HealthCheck(command: "true")
+            )
+            return ConfigValidator().validate(Config(runners: [runner]))
+        }
+        XCTAssertTrue(issues(repository: nil, runnerGroup: "mac-fleet").isEmpty)
+        XCTAssertTrue(issues(repository: nil, runnerGroup: " ").contains(ConfigValidationIssue(
+            severity: .error,
+            message: "runner runner-1: provisioner.config.runnerGroup must not be empty when set."
+        )))
+        XCTAssertTrue(issues(repository: "repo", runnerGroup: "mac-fleet").contains(ConfigValidationIssue(
+            severity: .error,
+            message: "runner runner-1: provisioner.config.runnerGroup requires organization-level registration; remove provisioner.config.repository."
+        )))
+    }
 }

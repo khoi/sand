@@ -5,6 +5,7 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
     let privateKeyPath: String
     let runnerName: String
     let extraLabels: [String]?
+    let runnerGroup: String?
 
     init(
         appId: Int,
@@ -12,7 +13,8 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         repository: String?,
         privateKeyPath: String,
         runnerName: String,
-        extraLabels: [String]?
+        extraLabels: [String]?,
+        runnerGroup: String? = nil
     ) {
         self.appId = appId
         self.organization = organization
@@ -20,6 +22,7 @@ struct GitHubProvisionerConfig: Decodable, Sendable {
         self.privateKeyPath = privateKeyPath
         self.runnerName = runnerName
         self.extraLabels = extraLabels
+        self.runnerGroup = runnerGroup
     }
 }
 
@@ -35,6 +38,7 @@ struct GitHubProvisioner: Sendable {
         let labels = labelsString(extraLabels: config.extraLabels)
         let url = runnerURL(organization: config.organization, repository: config.repository)
         let cacheScript = runnerCacheScript(cacheDirectory: cacheDirectory)
+        let runnerGroupArgument = config.runnerGroup.map { " --runnergroup \(Self.shellQuote($0))" } ?? ""
         return [
             """
 \(Self.runnerAssetScript(runnerVersion: runnerVersion))
@@ -45,10 +49,14 @@ echo $download_url
             "rm -rf ~/actions-runner && mkdir ~/actions-runner",
             "tar xzf ./actions-runner.tar.gz -C ~/actions-runner",
             "echo \"Runner downloaded and extracted\"",
-            "~/actions-runner/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)",
+            "~/actions-runner/config.sh --url \(url) --name \(config.runnerName) --token \(runnerToken) --ephemeral --unattended --replace --labels \(labels)\(runnerGroupArgument)",
             "echo \"Runner script downloaded, starting ~/actions-runner/run.sh\"",
             "~/actions-runner/run.sh"
         ]
+    }
+
+    static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private func labelsString(extraLabels: [String]?) -> String {

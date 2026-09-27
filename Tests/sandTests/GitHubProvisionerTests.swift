@@ -99,4 +99,31 @@ final class GitHubProvisionerTests: XCTestCase {
         XCTAssertTrue(joined.contains("cache_dir_name=\"\(cacheDirectory)\""))
         XCTAssertTrue(joined.contains("version=\"\(runnerVersion)\""))
     }
+
+    func testScriptRegistersIntoQuotedRunnerGroup() {
+        let config = GitHubProvisionerConfig(
+            appId: 1,
+            organization: "org",
+            repository: nil,
+            privateKeyPath: "/tmp/key.pem",
+            runnerName: "runner-1",
+            extraLabels: nil,
+            runnerGroup: "Mac Fleet's"
+        )
+        let joined = GitHubProvisioner().script(config: config, runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        XCTAssertTrue(joined.contains("--labels sand --runnergroup 'Mac Fleet'\\''s'"))
+    }
+
+    func testScriptOmitsRunnerGroupByDefault() {
+        let config = GitHubProvisionerConfig(
+            appId: 1,
+            organization: "org",
+            repository: nil,
+            privateKeyPath: "/tmp/key.pem",
+            runnerName: "runner-1",
+            extraLabels: nil
+        )
+        let joined = GitHubProvisioner().script(config: config, runnerToken: "token", runnerVersion: "2.999.0").joined(separator: "\n")
+        XCTAssertFalse(joined.contains("--runnergroup"))
+    }
 }
