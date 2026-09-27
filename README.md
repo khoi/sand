@@ -20,8 +20,11 @@ sudo defaults write /Library/Preferences/SystemConfiguration/com.apple.InternetS
 
 ```
 brew tap khoi/sand
+brew trust khoi/sand openai/tools
 brew install sand
 ```
+
+Homebrew only loads formulae from taps you have trusted; the second tap provides Tart.
 
 ## Usage
 

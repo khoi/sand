@@ -4,26 +4,29 @@ on:
     branches:
       - main
   pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: macos-26
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.2"
+      - uses: actions/checkout@v7
       - run: swift test
   brew:
-    runs-on: macos-15
+    runs-on: macos-26
+    timeout-minutes: 30
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.2"
-      - run: echo "HOMEBREW_SWIFT=$(which swift)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+      - run: echo "HOMEBREW_SWIFT=$(xcrun --find swift)" >> "$GITHUB_ENV"
+      - run: |
+          git switch -c ci-under-test
+          sed -i '' "s|^  head .*|  head \"file://${GITHUB_WORKSPACE}\", using: :git, branch: \"ci-under-test\"|" Formula/sand.rb
       - run: brew tap-new local/sand
+      - run: brew trust local/sand openai/tools $(brew tap | grep -v '^homebrew/')
       - run: cp Formula/sand.rb "$(brew --repo local/sand)/Formula/sand.rb"
       - run: brew install --HEAD local/sand/sand
       - run: brew test local/sand/sand
