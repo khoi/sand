@@ -95,6 +95,6 @@ struct Logger: Sendable {
         case .critical:
             logger.fault("\(message, privacy: .public)")
         }
-        fileSink?.writeSync(level: level, label: label, message: message)
+        fileSink?.write(level: level, label: label, message: message)
     }
 }
