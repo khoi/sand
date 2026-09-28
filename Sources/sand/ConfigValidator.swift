@@ -13,6 +13,10 @@ struct ConfigValidationIssue: Equatable {
 final class ConfigValidator {
     func validate(_ config: Config) -> [ConfigValidationIssue] {
         var issues: [ConfigValidationIssue] = []
+        if let seconds = config.imageRefreshIntervalSeconds,
+           seconds <= 0 || !seconds.isFinite {
+            issues.append(.init(severity: .error, message: "imageRefreshIntervalSeconds must be finite and greater than 0."))
+        }
         if config.runners.isEmpty {
             issues.append(.init(severity: .error, message: "runners must not be empty."))
             return issues

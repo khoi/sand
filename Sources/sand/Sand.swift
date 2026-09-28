@@ -62,6 +62,7 @@ struct Run: AsyncParsableCommand {
         let provisioner = GitHubProvisioner()
         let runnerVersionResolver = GitHubRunnerVersionResolver()
         let runnerCache = RunnerCache()
+        let imageRefreshCoordinator = ImageRefreshCoordinator(intervalSeconds: config.imageRefreshIntervalSeconds)
         var runners: [Runner] = []
         var cleanupTargets: [VMShutdownCoordinator] = []
         var runnerControls: [RunnerControl] = []
@@ -89,7 +90,8 @@ struct Run: AsyncParsableCommand {
                 vmName: runnerName,
                 logLabel: logLabel,
                 logLevel: level,
-                logSink: logSink
+                logSink: logSink,
+                imageRefreshCoordinator: imageRefreshCoordinator
             )
             runners.append(runner)
         }
