@@ -6,6 +6,7 @@ struct Runner: Sendable {
     let provisioner: GitHubProvisioner
     let runnerVersionResolver: GitHubRunnerVersionResolver
     let runnerCache: RunnerCache
+    let imageRefreshCoordinator: ImageRefreshCoordinator
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
     let control: RunnerControl
@@ -36,13 +37,15 @@ struct Runner: Sendable {
         vmName: String,
         logLabel: String,
         logLevel: LogLevel,
-        logSink: LogFileSink?
+        logSink: LogFileSink?,
+        imageRefreshCoordinator: ImageRefreshCoordinator
     ) {
         self.tart = tart
         self.github = github
         self.provisioner = provisioner
         self.runnerVersionResolver = runnerVersionResolver
         self.runnerCache = runnerCache
+        self.imageRefreshCoordinator = imageRefreshCoordinator
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
         self.control = control
@@ -84,15 +87,7 @@ struct Runner: Sendable {
         let vm = config.vm
         let provisionerConfig = config.provisioner
         let source = vm.source.resolvedSource
-        if vm.source.type == .oci {
-            logger.info("prepare source \(source)")
-            do {
-                try await tart.prepare(source: source)
-            } catch {
-                logger.error("prepare source \(source) failed: \(String(describing: error))")
-                throw error
-            }
-        } else {
+        if vm.source.type == .local {
             logger.info("local source \(source); skipping registry pull")
         }
         do {
@@ -105,7 +100,7 @@ struct Runner: Sendable {
         }
         logger.info("clone VM \(name) from \(source)")
         do {
-            try await tart.clone(source: source, name: name)
+            try await imageRefreshCoordinator.clone(tart: tart, source: vm.source, name: name)
         } catch {
             logger.error("clone VM \(name) from \(source) failed: \(String(describing: error))")
             throw error
