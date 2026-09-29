@@ -55,6 +55,19 @@ brew services start sand
 
 The service restarts sand if it exits, runs it as an interactive process so launchd doesn't throttle its CPU and I/O (or the VMs it starts), and writes output to `~/Library/Logs/sand.log`. Stop it with `brew services stop sand`.
 
+To let active jobs finish before stopping the service:
+
+```bash
+sand drain --config ~/sand.yml
+brew services stop sand
+```
+
+`sand drain` waits for runner cleanup, then reports completion. Idle GitHub runners are deregistered before stopping their VMs; busy ephemeral runners finish their current job. Script provisioners finish the current script and post-run hook. Sand stops creating replacement VMs and stays alive but idle so Homebrew does not restart it. Use `brew services restart sand` to resume work.
+
+Use the same configuration path as the running service. Sand keeps small `.sand-lock`, `.sand-drain`, and `.sand-drained` files beside the config, so its directory must be writable. These files are removed when sand exits normally or handles SIGINT/SIGTERM, including `brew services stop sand`. They remain while sand is drained and idle. After a crash or SIGKILL, leftover files are ignored by the next instance and removed when it exits. Only one sand process can use a configuration at a time. The command fails if no service is running or it stops before completion. Interrupting the drain command does not cancel the drain request.
+
+If GitHub cannot confirm that a runner is idle, sand leaves it running and logs the issue; draining can wait indefinitely for a job or API recovery. A job assigned concurrently with the drain request may still finish on that ephemeral runner. Normal Ctrl+C, SIGTERM, and `brew services stop sand` remain immediate stops, so wait for `sand drain` to complete first.
+
 ## Logs
 
 sand logs to macOS default logging system using `os_log`. To see the log

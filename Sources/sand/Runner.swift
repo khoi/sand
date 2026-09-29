@@ -6,6 +6,7 @@ struct Runner: Sendable {
     let provisioner: GitHubProvisioner
     let runnerVersionResolver: GitHubRunnerVersionResolver
     let runnerCache: RunnerCache
+    let serviceControl: ServiceControl?
     let config: Config.RunnerConfig
     let shutdownCoordinator: VMShutdownCoordinator
     let control: RunnerControl
@@ -36,13 +37,15 @@ struct Runner: Sendable {
         vmName: String,
         logLabel: String,
         logLevel: LogLevel,
-        logSink: LogFileSink?
+        logSink: LogFileSink?,
+        serviceControl: ServiceControl? = nil
     ) {
         self.tart = tart
         self.github = github
         self.provisioner = provisioner
         self.runnerVersionResolver = runnerVersionResolver
         self.runnerCache = runnerCache
+        self.serviceControl = serviceControl
         self.config = config
         self.shutdownCoordinator = shutdownCoordinator
         self.control = control
@@ -52,34 +55,30 @@ struct Runner: Sendable {
     }
 
     func run() async throws {
-        if let stopAfter = config.stopAfter {
-            guard stopAfter > 0 else {
-                return
-            }
-            for _ in 0..<stopAfter {
-                do {
-                    try await runOnce()
-                } catch {
-                    logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
-                    throw error
-                }
-            }
-            return
-        }
-        while true {
+        var completed = 0
+        while !drainRequested && (config.stopAfter.map { completed < $0 } ?? true) {
+            try Task.checkCancellation()
             do {
                 try await runOnce()
             } catch {
                 logger.error("runOnce failed (vm=\(vmName)): \(String(describing: error))")
+                if drainRequested {
+                    await shutdownCoordinator.cleanup(reason: "draining")
+                    return
+                }
                 throw error
             }
+            completed += 1
         }
     }
+
+    private var drainRequested: Bool { serviceControl?.drainRequested == true }
 
     private func runOnce() async throws {
         let stopAfterLabel = config.stopAfter.map(String.init) ?? "nil"
         logger.debug("runOnce start (vm=\(vmName), stopAfter=\(stopAfterLabel))")
         await applyRestartBackoffIfNeeded()
+        guard !drainRequested else { return }
         let name = vmName
         let vm = config.vm
         let provisionerConfig = config.provisioner
@@ -95,6 +94,7 @@ struct Runner: Sendable {
         } else {
             logger.info("local source \(source); skipping registry pull")
         }
+        guard !drainRequested else { return }
         do {
             if try await tart.isRunning(name: name) {
                 logger.info("VM \(name) already running, stopping before boot")
@@ -111,6 +111,10 @@ struct Runner: Sendable {
             throw error
         }
         await shutdownCoordinator.activate(name: name)
+        if drainRequested {
+            await shutdownCoordinator.cleanup(reason: "draining before boot")
+            return
+        }
         do {
             try await applyVMConfigIfNeeded(name: name, vm: vm)
         } catch {
@@ -158,6 +162,10 @@ struct Runner: Sendable {
             await shutdownCoordinator.cleanup(reason: "ssh not ready")
             return
         }
+        if drainRequested {
+            await shutdownCoordinator.cleanup(reason: "draining before pre-run")
+            return
+        }
         if let preRun = config.preRun {
             logger.info("run preRun")
             logScript(preRun)
@@ -176,6 +184,10 @@ struct Runner: Sendable {
                 await shutdownCoordinator.cleanup(reason: "preRun failed")
                 throw error
             }
+        }
+        if drainRequested {
+            await shutdownCoordinator.cleanup(reason: "draining before provisioning")
+            return
         }
         let healthCheckState = HealthCheckState()
         logger.debug("healthCheck task preparing (vm=\(name))")
@@ -241,7 +253,7 @@ struct Runner: Sendable {
                     runnerName: runnerName,
                     runnerToken: token
                 )
-                let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState, secrets: [token])
+                let outcome = await runProvisionerCommands(commands, ssh: ssh, healthCheckState: healthCheckState, secrets: [token], githubRunnerName: runnerName)
                 switch outcome {
                 case .completed:
                     logger.warning("github provisioner completed; runner exited, restarting VM")
@@ -372,6 +384,7 @@ struct Runner: Sendable {
         var lastSSHError: String?
         logger.debug("waitForSSH start (vm=\(vmName), maxRetries=\(maxRetries.map(String.init) ?? "nil"))")
         while true {
+            if drainRequested { return false }
             if let maxRetries, attempt >= maxRetries {
                 let statusLabel = lastStatus.map(statusLabel) ?? "unknown"
                 let statusErrorLabel = lastStatusError ?? "none"
@@ -606,10 +619,13 @@ struct Runner: Sendable {
         _ commands: [String],
         ssh: SSHClient,
         healthCheckState: HealthCheckState,
-        secrets: [String] = []
+        secrets: [String] = [],
+        githubRunnerName: String? = nil
     ) async -> ProvisionerSequenceOutcome {
         for command in commands {
-            let outcome = await runProvisionerCommand(command, ssh: ssh, healthCheckState: healthCheckState, secrets: secrets)
+            if drainRequested { return .completed }
+            let outcome = await runProvisionerCommand(command, ssh: ssh, healthCheckState: healthCheckState, secrets: secrets,
+                                                      githubRunnerName: isRunnerCommand(command) ? githubRunnerName : nil)
             switch outcome {
             case .completed:
                 continue
@@ -626,7 +642,8 @@ struct Runner: Sendable {
         _ command: String,
         ssh: SSHClient,
         healthCheckState: HealthCheckState,
-        secrets: [String]
+        secrets: [String],
+        githubRunnerName: String?
     ) async -> ProvisionerOutcome {
         let displayCommand = Runner.redact(command, secrets: secrets)
         logScript(displayCommand)
@@ -639,7 +656,7 @@ struct Runner: Sendable {
                 let handle = try ssh.start(command: command)
                 await control.setProvisioningHandle(handle)
                 logger.debug("\(labeledCommand) started; awaiting completion or healthCheck failure")
-                let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState)
+                let outcome = await awaitProvisionerCommand(handle: handle, healthCheckState: healthCheckState, githubRunnerName: githubRunnerName)
                 switch outcome {
                 case let .completed(result):
                     let stdoutLabel = commandLabel.isEmpty ? "stdout" : "stdout (\(commandLabel))"
@@ -680,7 +697,8 @@ struct Runner: Sendable {
 
     private func awaitProvisionerCommand(
         handle: ProcessHandle,
-        healthCheckState: HealthCheckState
+        healthCheckState: HealthCheckState,
+        githubRunnerName: String?
     ) async -> ProvisionerOutcome {
         await withTaskGroup(of: ProvisionerOutcome?.self) { group in
             group.addTask {
@@ -699,6 +717,34 @@ struct Runner: Sendable {
                     return nil
                 } catch {
                     return .failed(error)
+                }
+            }
+            if let githubRunnerName, let github, let serviceControl {
+                group.addTask {
+                    while !Task.isCancelled {
+                        if serviceControl.drainRequested {
+                            do {
+                                switch try await github.removeRunner(named: githubRunnerName, onlyIfIdle: true) {
+                                case .removed:
+                                    logger.info("drain: removed idle runner \(githubRunnerName)")
+                                    await handle.terminate()
+                                    return nil
+                                case .busy:
+                                    logger.info("drain: waiting for \(githubRunnerName) to finish its job")
+                                    return nil
+                                case .missing:
+                                    // Absence from the API alone is not proof the guest has finished.
+                                    break
+                                }
+                            } catch {
+                                if Task.isCancelled { return nil }
+                                logger.warning("drain: cannot confirm runner is idle; leaving it running: \(error)")
+                            }
+                        }
+                        do { try await Task.sleep(for: .seconds(serviceControl.drainRequested ? 5 : 1)) }
+                        catch { return nil }
+                    }
+                    return nil
                 }
             }
             while let outcome = await group.next() {
@@ -766,6 +812,7 @@ struct Runner: Sendable {
     }
 
     private func retrySSHIfNeeded(error: Error, stage: String, attempt: inout Int) async -> Bool {
+        guard !drainRequested else { return false }
         guard shouldRetrySSH(error), attempt < sshRetryDelays.count else {
             return false
         }

@@ -6,7 +6,7 @@ import Foundation
 @available(macOS 15.0, *)
 struct Sand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        subcommands: [Run.self, Destroy.self, Doctor.self, Validate.self]
+        subcommands: [Run.self, Drain.self, Destroy.self, Doctor.self, Validate.self]
     )
 }
 
@@ -29,7 +29,8 @@ struct Run: AsyncParsableCommand {
         if !missing.isEmpty {
             throw ValidationError("Missing required dependencies in PATH: \(missing.joined(separator: ", ")). Install them and re-run.")
         }
-        let config = try Config.load(path: config)
+        let configPath = config
+        let config = try Config.load(path: configPath)
         let validator = ConfigValidator()
         let issues = validator.validate(config)
         let errors = issues.filter { $0.severity == .error }
@@ -59,6 +60,8 @@ struct Run: AsyncParsableCommand {
             return
         }
 
+        let serviceControl = try ServiceControl(configPath: configPath)
+        defer { serviceControl.cleanup() }
         let provisioner = GitHubProvisioner()
         let runnerVersionResolver = GitHubRunnerVersionResolver()
         let runnerCache = RunnerCache()
@@ -89,7 +92,8 @@ struct Run: AsyncParsableCommand {
                 vmName: runnerName,
                 logLabel: logLabel,
                 logLevel: level,
-                logSink: logSink
+                logSink: logSink,
+                serviceControl: serviceControl
             )
             runners.append(runner)
         }
@@ -112,6 +116,7 @@ struct Run: AsyncParsableCommand {
                 }
             }
             group.wait()
+            serviceControl.cleanup()
         }
         defer {
             _ = signalHandler
@@ -123,6 +128,12 @@ struct Run: AsyncParsableCommand {
                 }
             }
             try await group.waitForAll()
+        }
+        if serviceControl.drainRequested {
+            try serviceControl.markDrained()
+            logger.info("drain complete; sand is idle until stopped or restarted")
+            // Stay alive so launchd's KeepAlive does not create new runners.
+            while true { try await Task.sleep(for: .seconds(3600)) }
         }
     }
 
