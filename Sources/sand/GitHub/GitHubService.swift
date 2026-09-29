@@ -28,6 +28,7 @@ struct GitHubService: Sendable {
         struct Runner: Decodable {
             let id: Int
             let name: String
+            let busy: Bool?
         }
 
         let runners: [Runner]
@@ -48,16 +49,29 @@ struct GitHubService: Sendable {
     }
 
     func deleteRunner(named name: String) async throws -> Bool {
+        try await removeRunner(named: name, onlyIfIdle: false) == .removed
+    }
+
+    enum RemovalResult: Equatable { case removed, missing, busy }
+
+    func removeRunner(named name: String, onlyIfIdle: Bool) async throws -> RemovalResult {
         let installationId = try await installationID()
         let accessToken = try await installationAccessToken(installationId: installationId)
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
         let encodedName = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
         let response: RunnersResponse = try await request(path: "\(runnersPath())?name=\(encodedName)", method: "GET", token: accessToken)
         guard let runner = response.runners.first(where: { $0.name == name }) else {
-            return false
+            return .missing
         }
-        _ = try await send(path: "\(runnersPath())/\(runner.id)", method: "DELETE", token: accessToken)
-        return true
+        // Missing busy information is not evidence that it is safe to stop a runner.
+        if onlyIfIdle, runner.busy != false { return .busy }
+        do {
+            _ = try await send(path: "\(runnersPath())/\(runner.id)", method: "DELETE", token: accessToken)
+        } catch GitHubServiceError.httpError(let status, _) where onlyIfIdle && status == 422 {
+            // GitHub can assign a job between the lookup and deletion. Let it finish.
+            return .busy
+        }
+        return .removed
     }
 
 
