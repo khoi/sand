@@ -322,9 +322,11 @@ struct Config: Decodable, Sendable {
     }
 
     let runners: [RunnerConfig]
+    let imageRefreshIntervalSeconds: Double?
 
-    init(runners: [RunnerConfig]) {
+    init(runners: [RunnerConfig], imageRefreshIntervalSeconds: Double? = nil) {
         self.runners = runners
+        self.imageRefreshIntervalSeconds = imageRefreshIntervalSeconds
     }
 
     static func load(path: String) throws -> Config {
@@ -347,7 +349,7 @@ struct Config: Decodable, Sendable {
                 healthCheck: runner.healthCheck
             )
         }
-        return Config(runners: expandedRunners)
+        return Config(runners: expandedRunners, imageRefreshIntervalSeconds: imageRefreshIntervalSeconds)
     }
 
     private func expandVM(_ vm: VM) -> VM {

@@ -165,7 +165,7 @@ struct Tart: Sendable {
         return .stopped
     }
 
-    private func hasOCI(source: String) async throws -> Bool {
+    func hasOCI(source: String) async throws -> Bool {
         let result = try await run(arguments: ["list", "--source", "oci", "--quiet"], wait: true)
         let output = result?.stdout ?? ""
         let expected = normalizeOCI(source)

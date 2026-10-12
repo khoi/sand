@@ -1,3 +1,4 @@
+imageRefreshIntervalSeconds: 86400
 runners:
   - name: runner-1
     stopAfter: null
