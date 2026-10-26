@@ -194,7 +194,7 @@ Use `vm.additionalDisks` to attach persistent storage alongside the disposable r
 ```yaml
 vm:
   additionalDisks:
-    - ~/sand-cache/build.raw
+    - source: ~/sand-cache/build.raw
     - source: /path/to/seed.img
       readOnly: true
       synchronization: full
@@ -202,16 +202,16 @@ vm:
 ```
 
 The default is an empty list. Each entry decodes to a `DiskAttachment`, which owns
-validation and canonical `--disk=...` argument formatting without a shell. A scalar
-string is shorthand for a plain `source`, so existing plain-path configurations
-continue to work. Use the mapping form for options; inline `:ro`, `:sync=...` and
-`:caching=...` option suffixes are rejected instead of maintaining a second parser
-for this unreleased API. OCI tags and NBD URL ports remain part of the source.
+validation and canonical `--disk=...` argument formatting without a shell. Each
+entry is a mapping; bare strings are not supported. Keep inline `:ro`, `:sync=...`
+and `:caching=...` option suffixes out of `source` and use the typed fields instead.
+OCI tags and NBD URL ports remain part of the source.
 
 The mapping keys are `source` (required), `readOnly` (default `false`),
 `synchronization` (`none`, `fsync`, `full`) and `caching` (`automatic`, `cached`,
-`uncached`). Omitted options retain Tart defaults. Unknown keys, blank sources,
-control characters and invalid option values fail during decoding. `none` disables
+`uncached`). Omitted options retain Tart defaults. Blank sources, NUL/line breaks
+and invalid option values fail during decoding. Unknown mapping keys are ignored,
+matching other Sand configuration types. `none` disables
 disk synchronization and should be used only when its durability tradeoff is
 acceptable. NBD sources accept only synchronization `none`/`full`, with no image
 caching option. File existence, block-device capabilities and source availability

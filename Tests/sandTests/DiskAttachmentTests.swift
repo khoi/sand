@@ -30,9 +30,9 @@ struct DiskAttachmentTests {
     @Test(arguments: ["/tmp/cache disk.raw", "/tmp/cache:backup", "ghcr.io/acme/image:16.0",
                       "ghcr.io:443/acme/image:16.0", "nbd://localhost:10809/cache",
                       "nbds+unix:///tmp/nbd.sock/cache"])
-    func scalarPlainSourcesPreserveColonsAndDefaults(source: String) throws {
-        let scalar = String(data: try JSONEncoder().encode(source), encoding: .utf8)!
-        let disk = try decode(scalar)
+    func mappingSourcesPreserveColonsAndDefaults(source: String) throws {
+        let mapping = String(data: try JSONEncoder().encode(["source": source]), encoding: .utf8)!
+        let disk = try decode(mapping)
         #expect(disk.source == source)
         #expect(!disk.readOnly && disk.synchronization == nil && disk.caching == nil)
         #expect(disk.tartArgument == "--disk=\(source)")
@@ -47,20 +47,26 @@ struct DiskAttachmentTests {
     }
 
     @Test(arguments: [
-        #""/tmp/cache.raw:ro""#,
-        #""/tmp/cache.raw:sync=full""#,
+        #""/tmp/cache.raw""#,
+        #"{"source":"/tmp/cache.raw:ro"}"#,
+        #"{"source":"/tmp/cache.raw:sync=full"}"#,
         #"{}"#,
         #"{"source":""}"#,
         #"{"source":"/tmp/cache.raw","synchronization":"fast"}"#,
         #"{"source":"/tmp/cache.raw","caching":"fast"}"#,
         #"{"source":"/tmp/cache.raw","readOnly":"maybe"}"#,
-        #"{"source":"/tmp/cache.raw","arguments":["--no-graphics"]}"#,
         #"{"path":"/tmp/cache.raw"}"#,
         #"{"source":"nbd://localhost:10809/cache","synchronization":"fsync"}"#,
         #"{"source":"nbd://localhost:10809/cache","caching":"cached"}"#
     ])
-    func rejectsInvalidSchemaOptionsAndInlineOptionStrings(entry: String) {
+    func rejectsInvalidMappingsOptionsAndScalarEntries(entry: String) {
         #expect(throws: (any Error).self) { _ = try decode(entry) }
+    }
+
+    @Test func ignoresUnknownMappingKeysLikeOtherConfigTypes() throws {
+        let disk = try decode(#"{"source":"/tmp/cache.raw","futureOption":true}"#)
+        #expect(disk.source == "/tmp/cache.raw")
+        #expect(!disk.readOnly)
     }
 
     @Test(arguments: ["", " ", "\t", "cache\n.raw", "cache\0.raw", "cache:"])

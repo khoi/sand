@@ -36,14 +36,14 @@ struct AdditionalDisksTests {
 
     @Test(arguments: ["", " ", "\t"])
     func rejectsEmptyDiskEntries(value: String) throws {
-        let encoded = String(data: try JSONEncoder().encode([value]), encoding: .utf8)!
+        let encoded = String(data: try JSONEncoder().encode([["source": value]]), encoding: .utf8)!
         #expect(throws: (any Error).self) {
             _ = try load(disks: "additionalDisks: \(encoded)")
         }
     }
 
     @Test func leavesSourceExistenceAndDeviceValidationToTart() throws {
-        let config = try load(disks: "additionalDisks: ['/path/not/yet/present.raw', {source: 'nbd://localhost:10809/cache', synchronization: full}]")
+        let config = try load(disks: "additionalDisks: [{source: '/path/not/yet/present.raw'}, {source: 'nbd://localhost:10809/cache', synchronization: full}]")
         #expect(ConfigValidator().validate(config).isEmpty)
     }
 

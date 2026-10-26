@@ -18,7 +18,10 @@ struct DiskAttachment: Decodable, Equatable, Sendable {
         case invalid(String)
 
         var errorDescription: String? {
-            switch self { case .invalid(let message): return message }
+            switch self {
+            case .invalid(let message):
+                return message
+            }
         }
     }
 
@@ -27,8 +30,12 @@ struct DiskAttachment: Decodable, Equatable, Sendable {
     let synchronization: Synchronization?
     let caching: Caching?
 
-    init(source: String, readOnly: Bool = false,
-         synchronization: Synchronization? = nil, caching: Caching? = nil) throws {
+    init(
+        source: String,
+        readOnly: Bool = false,
+        synchronization: Synchronization? = nil,
+        caching: Caching? = nil
+    ) throws {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !source.contains(where: { $0 == "\0" || $0 == "\n" || $0 == "\r" }),
               !source.hasSuffix(":") else {
@@ -62,12 +69,20 @@ struct DiskAttachment: Decodable, Equatable, Sendable {
     func expanded() -> Self {
         // Only local leading-tilde paths are expanded; URL syntax stays intact.
         guard source.hasPrefix("~") else { return self }
-        return Self(validatedSource: (source as NSString).expandingTildeInPath,
-                    readOnly: readOnly, synchronization: synchronization, caching: caching)
+        return Self(
+            validatedSource: (source as NSString).expandingTildeInPath,
+            readOnly: readOnly,
+            synchronization: synchronization,
+            caching: caching
+        )
     }
 
-    private init(validatedSource: String, readOnly: Bool,
-                 synchronization: Synchronization?, caching: Caching?) {
+    private init(
+        validatedSource: String,
+        readOnly: Bool,
+        synchronization: Synchronization?,
+        caching: Caching?
+    ) {
         self.source = validatedSource
         self.readOnly = readOnly
         self.synchronization = synchronization
@@ -80,38 +95,20 @@ struct DiskAttachment: Decodable, Equatable, Sendable {
         }
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case source, readOnly, synchronization, caching
-    }
-
-    private struct AnyKey: CodingKey {
-        var stringValue: String
-        var intValue: Int? { nil }
-        init?(stringValue: String) { self.stringValue = stringValue }
-        init?(intValue: Int) { return nil }
+    private enum CodingKeys: String, CodingKey {
+        case source
+        case readOnly
+        case synchronization
+        case caching
     }
 
     init(from decoder: Decoder) throws {
-        let scalar = try decoder.singleValueContainer()
-        if let value = try? scalar.decode(String.self) {
-            do { try self.init(source: value) }
-            catch { throw DecodingError.dataCorruptedError(in: scalar, debugDescription: error.localizedDescription) }
-            return
-        }
-        let raw = try decoder.container(keyedBy: AnyKey.self)
-        let allowed = Set(CodingKeys.allCases.map(\.rawValue))
-        guard raw.allKeys.allSatisfy({ allowed.contains($0.stringValue) }) else {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                debugDescription: "Disk attachment keys are source, readOnly, synchronization and caching."))
-        }
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        do {
-            try self.init(source: values.decode(String.self, forKey: .source),
-                          readOnly: values.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false,
-                          synchronization: values.decodeIfPresent(Synchronization.self, forKey: .synchronization),
-                          caching: values.decodeIfPresent(Caching.self, forKey: .caching))
-        } catch let error as DecodingError { throw error }
-        catch { throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                                                       debugDescription: error.localizedDescription)) }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            source: container.decode(String.self, forKey: .source),
+            readOnly: container.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false,
+            synchronization: container.decodeIfPresent(Synchronization.self, forKey: .synchronization),
+            caching: container.decodeIfPresent(Caching.self, forKey: .caching)
+        )
     }
 }
