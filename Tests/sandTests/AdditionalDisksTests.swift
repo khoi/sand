@@ -27,22 +27,23 @@ struct AdditionalDisksTests {
     }
 
     @Test func expandsTildeWithoutChangingAttachmentOptions() throws {
-        let config = try load(disks: "additionalDisks: ['~/cache disk.raw:ro', 'nbd://localhost:10809/cache:sync=full']")
+        let config = try load(disks: "additionalDisks: [{source: '~/cache disk.raw', readOnly: true}, {source: 'nbd://localhost:10809/cache', synchronization: full}]")
         #expect(config.runners[0].vm.additionalDisks == [
-            Config.expandPath("~/cache disk.raw:ro"),
-            "nbd://localhost:10809/cache:sync=full"
+            try DiskAttachment(source: Config.expandPath("~/cache disk.raw"), readOnly: true),
+            try DiskAttachment(source: "nbd://localhost:10809/cache", synchronization: .full)
         ])
     }
 
     @Test(arguments: ["", " ", "\t"])
     func rejectsEmptyDiskEntries(value: String) throws {
         let encoded = String(data: try JSONEncoder().encode([value]), encoding: .utf8)!
-        let issues = ConfigValidator().validate(try load(disks: "additionalDisks: \(encoded)"))
-        #expect(issues.contains { $0.message.contains("vm.additionalDisks entries must not be empty") })
+        #expect(throws: (any Error).self) {
+            _ = try load(disks: "additionalDisks: \(encoded)")
+        }
     }
 
-    @Test func leavesDiskSyntaxAndExistenceValidationToTart() throws {
-        let config = try load(disks: "additionalDisks: ['/path/not/yet/present.raw', 'nbd://localhost:10809/cache:sync=full']")
+    @Test func leavesSourceExistenceAndDeviceValidationToTart() throws {
+        let config = try load(disks: "additionalDisks: ['/path/not/yet/present.raw', {source: 'nbd://localhost:10809/cache', synchronization: full}]")
         #expect(ConfigValidator().validate(config).isEmpty)
     }
 
@@ -51,9 +52,9 @@ struct AdditionalDisksTests {
         var options = Tart.RunOptions.default
         options.rootDiskOpts = "caching=cached"
         options.additionalDisks = [
-            "/tmp/cache disk.raw:sync=full",
-            "/tmp/$(not-a-command).img:ro",
-            "--no-graphics"
+            try DiskAttachment(source: "/tmp/cache disk.raw", synchronization: .full),
+            try DiskAttachment(source: "/tmp/$(not-a-command).img", readOnly: true),
+            try DiskAttachment(source: "--no-graphics")
         ]
         try makeTart(process).run(name: "example", options: options)
         #expect(process.startCalls[0].arguments == [

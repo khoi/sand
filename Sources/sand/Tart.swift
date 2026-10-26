@@ -34,7 +34,7 @@ struct Tart: Sendable {
         let noClipboard: Bool
         let nested: Bool
         var rootDiskOpts: String? = nil
-        var additionalDisks: [String] = []
+        var additionalDisks: [DiskAttachment] = []
 
         static let `default` = RunOptions(directoryMounts: [], noAudio: false, noGraphics: true, noClipboard: false, nested: false)
     }
@@ -122,7 +122,7 @@ struct Tart: Sendable {
             arguments.append("--root-disk-opts=\(rootDiskOpts)")
         }
         for disk in options.additionalDisks {
-            arguments.append("--disk=\(disk)")
+            arguments.append(disk.tartArgument)
         }
         for mount in options.directoryMounts {
             arguments.append("--dir")

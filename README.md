@@ -195,13 +195,28 @@ Use `vm.additionalDisks` to attach persistent storage alongside the disposable r
 vm:
   additionalDisks:
     - ~/sand-cache/build.raw
-    - /path/to/seed.img:ro
+    - source: /path/to/seed.img
+      readOnly: true
+      synchronization: full
+      caching: automatic
 ```
 
-The default is an empty list. Each entry is passed as one `--disk=<entry>` argument,
-without a shell. A leading `~` is expanded on the host; the remaining disk attachment
-syntax and validation belong to Tart, including attachment options and supported
-remote disk sources. `vm.run.rootDiskOpts` continues to configure only the root disk.
+The default is an empty list. Each entry decodes to a `DiskAttachment`, which owns
+validation and canonical `--disk=...` argument formatting without a shell. A scalar
+string is shorthand for a plain `source`, so existing plain-path configurations
+continue to work. Use the mapping form for options; inline `:ro`, `:sync=...` and
+`:caching=...` option suffixes are rejected instead of maintaining a second parser
+for this unreleased API. OCI tags and NBD URL ports remain part of the source.
+
+The mapping keys are `source` (required), `readOnly` (default `false`),
+`synchronization` (`none`, `fsync`, `full`) and `caching` (`automatic`, `cached`,
+`uncached`). Omitted options retain Tart defaults. Unknown keys, blank sources,
+control characters and invalid option values fail during decoding. `none` disables
+disk synchronization and should be used only when its durability tradeoff is
+acceptable. NBD sources accept only synchronization `none`/`full`, with no image
+caching option. File existence, block-device capabilities and source availability
+remain Tart's responsibility. A leading `~` is expanded on the host, preserving the
+typed options. `vm.run.rootDiskOpts` continues to configure only the root disk.
 
 Sand does not create, erase, snapshot or delete these additional disks. Writes can
 survive failed jobs. Provision the storage separately, and do not attach the same
