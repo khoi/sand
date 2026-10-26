@@ -99,6 +99,9 @@ final class ConfigValidator {
         if let rootDiskOpts = vm.run.rootDiskOpts, rootDiskOpts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append(.init(severity: .error, message: "vm.run.rootDiskOpts must not be empty when set."))
         }
+        if vm.additionalDisks.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            issues.append(.init(severity: .error, message: "vm.additionalDisks entries must not be empty."))
+        }
 
         if vm.ssh.user.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             issues.append(.init(severity: .error, message: "vm.ssh.user must not be empty."))

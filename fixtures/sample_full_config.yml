@@ -24,6 +24,7 @@ runners:
         nested: false
         rootDiskOpts: null
       diskSizeGb: null
+      additionalDisks: []
       ssh:
         user: admin
         password: admin

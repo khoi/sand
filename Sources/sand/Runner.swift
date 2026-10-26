@@ -143,7 +143,8 @@ struct Runner: Sendable {
             noGraphics: vm.run.noGraphics,
             noClipboard: vm.run.noClipboard,
             nested: vm.run.nested,
-            rootDiskOpts: vm.run.rootDiskOpts
+            rootDiskOpts: vm.run.rootDiskOpts,
+            additionalDisks: vm.additionalDisks
         )
         logRunOptions(name: name, options: runOptions)
         logger.info("boot VM \(name)")

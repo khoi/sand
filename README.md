@@ -187,6 +187,27 @@ Set `rootDiskOpts` to tune the root disk with `tart run --root-disk-opts`. Since
 
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml) or [fixtures/sample_on_prod.yml](fixtures/sample_on_prod.yml)
 
+### Additional disks
+
+Use `vm.additionalDisks` to attach persistent storage alongside the disposable root disk:
+
+```yaml
+vm:
+  additionalDisks:
+    - ~/sand-cache/build.raw
+    - /path/to/seed.img:ro
+```
+
+The default is an empty list. Each entry is passed as one `--disk=<entry>` argument,
+without a shell. A leading `~` is expanded on the host; the remaining disk attachment
+syntax and validation belong to Tart, including attachment options and supported
+remote disk sources. `vm.run.rootDiskOpts` continues to configure only the root disk.
+
+Sand does not create, erase, snapshot or delete these additional disks. Writes can
+survive failed jobs. Provision the storage separately, and do not attach the same
+writable disk to concurrent runners. The host must not mount it read-write while a
+guest owns it. Read-only disks may be shared when supported by Tart.
+
 ## Acknowledgements
 
 - https://github.com/cirruslabs/tart - doing all the heavy lifting interacting with VMs.
