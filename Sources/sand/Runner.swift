@@ -158,7 +158,6 @@ struct Runner: Sendable {
         Task {
             await logTartRunExit(tartRun, name: name)
         }
-        await logVMStatusAfterBoot(name: name)
         logger.info("wait for VM IP")
         let ip: String
         do {
@@ -170,6 +169,7 @@ struct Runner: Sendable {
             return
         }
         logger.info("VM IP \(ip)")
+        await logVMStatusAfterBoot(name: name)
         let ssh = SSHClient(processRunner: tart.processRunner, host: ip, config: vm.ssh)
         guard await waitForSSH(ssh: ssh) else {
             logger.debug("waitForSSH failed; scheduling restart")
