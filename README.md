@@ -187,6 +187,42 @@ Set `rootDiskOpts` to tune the root disk with `tart run --root-disk-opts`. Since
 
 Full configurations keys can be found at [fixtures/sample_full_config.yml](fixtures/sample_full_config.yml) or [fixtures/sample_on_prod.yml](fixtures/sample_on_prod.yml)
 
+### Additional disks
+
+Use `vm.additionalDisks` to attach persistent storage alongside the disposable root disk:
+
+```yaml
+vm:
+  additionalDisks:
+    - source: ~/sand-cache/build.raw
+    - source: /path/to/seed.img
+      readOnly: true
+      synchronization: full
+      caching: automatic
+```
+
+The default is an empty list. Each entry decodes to a `DiskAttachment`, which owns
+validation and canonical `--disk=...` argument formatting without a shell. Each
+entry is a mapping; bare strings are not supported. Keep inline `:ro`, `:sync=...`
+and `:caching=...` option suffixes out of `source` and use the typed fields instead.
+OCI tags and NBD URL ports remain part of the source.
+
+The mapping keys are `source` (required), `readOnly` (default `false`),
+`synchronization` (`none`, `fsync`, `full`) and `caching` (`automatic`, `cached`,
+`uncached`). Omitted options retain Tart defaults. Blank sources, NUL/line breaks
+and invalid option values fail during decoding. Unknown mapping keys are ignored,
+matching other Sand configuration types. `none` disables
+disk synchronization and should be used only when its durability tradeoff is
+acceptable. NBD sources accept only synchronization `none`/`full`, with no image
+caching option. File existence, block-device capabilities and source availability
+remain Tart's responsibility. A leading `~` is expanded on the host, preserving the
+typed options. `vm.run.rootDiskOpts` continues to configure only the root disk.
+
+Sand does not create, erase, snapshot or delete these additional disks. Writes can
+survive failed jobs. Provision the storage separately, and do not attach the same
+writable disk to concurrent runners. The host must not mount it read-write while a
+guest owns it. Read-only disks may be shared when supported by Tart.
+
 ## Acknowledgements
 
 - https://github.com/cirruslabs/tart - doing all the heavy lifting interacting with VMs.

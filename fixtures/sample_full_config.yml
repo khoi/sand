@@ -24,6 +24,11 @@ runners:
         nested: false
         rootDiskOpts: null
       diskSizeGb: null
+      additionalDisks:
+        - source: ~/sand-cache/build.raw
+          readOnly: false
+          synchronization: full
+          caching: automatic
       ssh:
         user: admin
         password: admin

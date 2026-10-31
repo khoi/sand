@@ -12,6 +12,7 @@ struct Config: Decodable, Sendable {
         let run: RunOptions
         let diskSizeGb: Int?
         let ssh: SSH
+        let additionalDisks: [DiskAttachment]
 
         init(
             source: VMSource,
@@ -20,7 +21,8 @@ struct Config: Decodable, Sendable {
             cache: Cache?,
             run: RunOptions,
             diskSizeGb: Int?,
-            ssh: SSH
+            ssh: SSH,
+            additionalDisks: [DiskAttachment] = []
         ) {
             self.source = source
             self.hardware = hardware
@@ -29,6 +31,7 @@ struct Config: Decodable, Sendable {
             self.run = run
             self.diskSizeGb = diskSizeGb
             self.ssh = ssh
+            self.additionalDisks = additionalDisks
         }
 
         init(from decoder: Decoder) throws {
@@ -40,6 +43,7 @@ struct Config: Decodable, Sendable {
             self.run = try container.decodeIfPresent(RunOptions.self, forKey: .run) ?? .default
             self.diskSizeGb = try container.decodeIfPresent(Int.self, forKey: .diskSizeGb)
             self.ssh = try container.decodeIfPresent(SSH.self, forKey: .ssh) ?? .standard
+            self.additionalDisks = try container.decodeIfPresent([DiskAttachment].self, forKey: .additionalDisks) ?? []
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -50,6 +54,7 @@ struct Config: Decodable, Sendable {
             case run
             case diskSizeGb
             case ssh
+            case additionalDisks
         }
     }
 
@@ -371,7 +376,8 @@ struct Config: Decodable, Sendable {
             cache: cache,
             run: vm.run,
             diskSizeGb: vm.diskSizeGb,
-            ssh: vm.ssh
+            ssh: vm.ssh,
+            additionalDisks: vm.additionalDisks.map { $0.expanded() }
         )
     }
 
