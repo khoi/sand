@@ -98,6 +98,18 @@ vm:
 
 For `local` sources sand skips the registry pull and clones the named VM directly (`tart clone <name> <ephemeral>`), so the VM must already exist in `~/.tart/vms`.
 
+To refresh OCI images daily, add this at the top level of your configuration:
+
+```yaml
+imageRefreshIntervalSeconds: 86400
+```
+
+Sand pulls each image before its first VM creation after startup, then before the next VM creation after the interval expires. Runners sharing an image share the refresh schedule. There is no background timer: if no new VM is needed, the refresh waits. Tart checks for updates and manages downloads and cache cleanup.
+
+Image preparation and cloning are serialized within one sand process; existing VMs and jobs keep running during a pull. Other sand processes and manual Tart commands are not coordinated. If a refresh fails and the image is still cached, sand uses it and retries on the next VM creation after five minutes (or the configured interval if shorter). Without a cached image, startup fails.
+
+Omit the setting to pull only missing images. Local sources are never pulled. The refresh schedule resets on restart; `--dry-run` only prepares missing images.
+
 ### GitHub Actions setup
 
 1) Create a GitHub App and grant `Self-hosted runners` permission set to `Read & Write` at the organization level. https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
